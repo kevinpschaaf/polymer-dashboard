@@ -1,0 +1,393 @@
+<!--
+@license
+Copyright (c) 2015 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+
+<link rel="import" href="../bower_components/polymer/polymer.html">
+
+<link rel="import" href="../bower_components/iron-flex-layout/iron-flex-layout.html">
+<link rel="import" href="../bower_components/google-signin/google-signin.html">
+<link rel="import" href="../bower_components/google-sheets/google-sheets.html">
+<link rel="import" href="../bower_components/iron-collapse/iron-collapse.html">
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-toggle-button/paper-toggle-button.html">
+<link rel="import" href="../bower_components/firebase-element/firebase-auth.html">
+
+<dom-module id="pd-app">
+
+  <template strip-whitespace>
+
+    <style>
+      :host {
+        display: block;
+      }
+      .horizontal {
+        @apply(--layout-horizontal);
+        @apply(--layout-center);
+      }
+      h3, .status {
+        padding: 5px;
+      }
+      .row {
+        @apply(--layout-horizontal);
+        border-bottom: 1px solid #ccc;
+      }
+      .header {
+        background: #ccc;
+      }
+      .row > * {
+        padding: 5px;
+        box-sizing: border-box;
+      }
+      .row.all {
+        background: pink;
+        font-weight: bold;
+      }
+      .row.lead {
+        background: lightgreen;
+      }
+      .row.maintainer {
+        background: lightyellow;
+      }
+      .name {
+        width: 300px;
+        background: initial;
+      }
+      .lead .name {
+        font-weight: bold;
+        padding-left: 20px;
+      }
+      .maintainer .name {
+        padding-left: 40px;
+      }
+      .repo .name {
+        padding-left: 50px;
+      }
+      .count {
+        width: 80px;
+      }
+      .github-icon {
+        height: 16px;
+        width: 16px;
+        margin-right: 8px;
+        display: inline-block;
+        background-image: url("../resources/github.png"); background-size: 100%; background-position: 50% 50%;
+      }
+    </style>
+
+    <h3>Polymer Issues Dashboard</h3>
+
+    <google-sheets id="sheet"
+      client-id="{{clientId}}"
+      key="1m0SleaDfRTPzDvlnInip9x4FXT6O98M2W8jwZyHmNp8" tab-id="3" rows="{{rows}}">
+    </google-sheets>
+
+    <div class="horizontal">
+
+      <google-signin
+        client-id="{{clientId}}"
+        scopes="https://spreadsheets.google.com/feeds">
+      </google-signin>
+
+      <firebase-auth provider="github" id="githubAuth"
+        location="https://polymer-demos.firebaseio.com"
+        user="{{githubUser}}">
+      </firebase-auth>
+
+      <paper-button raised id="githubButton" on-tap="toggleGithubLogin"><div class="github-icon"></div>{{githubStatus(githubUser)}}</paper-button>
+
+      <paper-button raised on-tap="_toggleLeads">Toggle leads</paper-button>
+      <paper-button raised on-tap="_toggleMaintainers">Toggle maintainers</paper-button>
+      <paper-button raised on-tap="refresh" disabled="{{bool(_requestQueue.length)}}">Refresh</paper-button>
+
+      <!-- <paper-toggle-button checked="{{autoRefresh}}"></paper-toggle-button>
+      <div>{{nextRefreshStatus}}</div> -->
+
+    </div>
+
+    <div class="status">Status: {{status}}</div>
+
+    <div class="row header">
+      <div class="name"></div>
+      <div class="count">Untriaged</div>
+      <div class="count">P0</div>
+      <div class="count">P1</div>
+      <div class="count">P2</div>
+      <div class="count">PR's</div>
+      <div class="count">Status</div>
+    </div>
+    <div class="row all">
+      <div class="name">All</div>
+      <div class="count">{{all.untriaged.length}}</div>
+      <div class="count">{{all.p0.length}}</div>
+      <div class="count">{{all.p1.length}}</div>
+      <div class="count">{{all.p2.length}}</div>
+      <div class="count">{{all.prs.length}}</div>
+    </div>
+    <template is="dom-repeat" items="{{all.leads}}">
+      <div class="row lead" on-tap="_toggleDetails">
+        <div class="name">{{item.name}}</div>
+        <div class="count">{{item.untriaged.length}}</div>
+        <div class="count">{{item.p0.length}}</div>
+        <div class="count">{{item.p1.length}}</div>
+        <div class="count">{{item.p2.length}}</div>
+        <div class="count">{{item.prs.length}}</div>
+      </div>
+      <iron-collapse opened="{{item.detailsOpen}}">
+        <template is="dom-repeat" items="{{item.maintainers}}">
+          <div class="row maintainer" on-tap="_toggleDetails">
+            <div class="name">{{item.name}}</div>
+            <div class="count">{{item.untriaged.length}}</div>
+            <div class="count">{{item.p0.length}}</div>
+            <div class="count">{{item.p1.length}}</div>
+            <div class="count">{{item.p2.length}}</div>
+            <div class="count">{{item.prs.length}}</div>
+          </div>
+          <iron-collapse opened="{{item.detailsOpen}}">
+            <template is="dom-repeat" items="{{item.repos}}">
+              <div class="row repo" on-tap="_toggleDetails">
+                <div class="name "><a target="_blank" href="https://github.com/polymerelements/{{item.name}}">{{item.name}}</a></div>
+                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+-label%3A%22p0+-+critical%22++-label%3A%22p1+-+backlog%22++-label%3A%22p2+-+icebox%22+">
+                  {{item.untriaged.length}}</a></div>
+                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p0+-+critical%22">{{item.p0.length}}</a></div>
+                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p1+-+backlog%22">{{item.p1.length}}</a></div>
+                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p2+-+icebox%22">{{item.p2.length}}</a></div>
+                <div class="count"><a target="_blank" href="https://github.com/polymerelements/iron-overlay-behavior/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen">{{item.prs.length}}</a></div>
+                <div class="count"><a target="_blank" href="https://travis-ci.org/PolymerElements/{{item.name}}"><img src="https://travis-ci.org/PolymerElements/{{item.name}}.svg?branch=master"></a></div>
+              </div>
+            </template>
+          </iron-collapse>
+        </template>
+      </iron-collapse>
+    </template>
+
+  </template>
+
+  <script>
+    Polymer({
+      is: 'pd-app',
+      properties: {
+        clientId: {
+          value: '638152944882-u4h50pu74fgnbovm5erc639a39rt8pd6.apps.googleusercontent.com'
+        },
+        options: {
+          value: function() {
+            return {
+              leadDetailsOpen: true,
+              maintainerDetailsOpen: true
+            };
+          }
+        },
+        rows: {
+          observer: '_rowsChanged'
+        },
+        autoRefresh: {
+          value: false,
+          observer: '_autoRefreshChanged'
+        },
+        autoRefreshInterval: {
+          value: 60 * 1000 * 10
+        },
+        nextRefreshStatus: {
+          value: 'Auto refresh off'
+        }
+      },
+      observers: [
+        '_refresh(_leads, githubUser)'
+      ],
+      githubStatus: function(user) {
+        return user ? 'Logout' : 'Login';
+      },
+      bool: function(b) {
+        return Boolean(b);
+      },
+      toggleGithubLogin: function() {
+        if (this.githubUser) {
+          this.$.githubAuth.logout();
+        } else {
+          this.$.githubAuth.login();
+        }
+      },
+      refresh: function() {
+        this._refresh(this._leads);
+      },
+      _rowsChanged: function(rows) {
+        var leads = {};
+        for (var i=0; i<rows.length; i++) {
+          var row = rows[i];
+          var o = leads[row.gsx$tl.$t] || (leads[row.gsx$tl.$t] = {});
+          var m = o[row.gsx$proposedmaintainer.$t] || (o[row.gsx$proposedmaintainer.$t] = []);
+          m.push({name: row.gsx$element.$t});
+        }
+        this._leads = leads;
+      },
+      _refresh: function(leads, githubUser) {
+        if (leads && githubUser) {
+          var leadRepos = [];
+          var requestQueue = [];
+          for (var lead in leads) {
+            if (lead) {
+              var or = {name: lead, maintainers: [], detailsOpen: this.options.leadDetailsOpen};
+              leadRepos.push(or);
+              for (var maint in leads[lead]) {
+                var mr = {name: maint, repos: [], detailsOpen: this.options.maintainerDetailsOpen};
+                or.maintainers.push(mr);
+                mr.repos = mr.repos.concat(leads[lead][maint]);
+                for (i=0; i<mr.repos.length; i++) {
+                  requestQueue.push({
+                    name: mr.repos[i].name,
+                    path: ['all', 'leads', leadRepos.length-1, 'maintainers', or.maintainers.length-1, 'repos', i],
+                  });
+                }
+              }
+            }
+          }
+          this.all = {
+            leads: leadRepos
+          };
+          this._requestQueue = requestQueue;
+          this._requestUntriaged();
+        }
+      },
+      _requestUntriaged: function() {
+        var repo = this._requestQueue[0];
+        if (repo) {
+          var name = 'polymerelements/' + repo.name;
+          var base = repo.next || 'https://api.github.com/repos/' + name + '/issues?state=open';
+          var url = base + '&access_token=' + this.githubUser.github.accessToken;
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', url);
+          xhr.send();
+          var self = this;
+          this.status = 'Fetching issues for \'' + repo.name + '\'';
+          xhr.addEventListener("load", function() {
+            self._handleUntriaged(xhr, repo);
+          });
+          xhr.addEventListener("error", function() {
+            self._handleUntriagedError(xhr);
+          });
+        } else {
+          this.status = 'Idle.';
+          this._queueRefresh();
+        }
+      },
+      _handleUntriaged: function(xhr, repo) {
+        if (xhr.status/100 != 2) {
+          if (xhr.getResponseHeader('X-RateLimit-Remaining') == '0') {
+            this._updateRateLimit(60);
+          } else {
+            this.status = 'Error: ' + xhr.status;
+            repo.next = null;
+            this._requestQueue.shift();
+            this._requestUntriaged();
+          }
+        } else {
+          var response = JSON.parse(xhr.responseText);
+          this._filterAndAdd(response, null, false, false, repo.path, 'all');
+          this._filterAndAdd(response, /^p\d/i, true, false, repo.path, 'untriaged');
+          this._filterAndAdd(response, /^p0/i, false, false, repo.path, 'p0');
+          this._filterAndAdd(response, /^p1/i, false, false, repo.path, 'p1');
+          this._filterAndAdd(response, /^p2/i, false, false, repo.path, 'p2');
+          this._filterAndAdd(response, null, false, true, repo.path, 'prs');
+          var link = xhr.getResponseHeader('Link');
+          repo.next = link && xhr.getResponseHeader('Link').match(/<([^>]*)>; rel="next"/)[1];
+          if (!repo.next) {
+            this._requestQueue.shift();
+          }
+          this._requestUntriaged();
+        }
+      },
+      _filterAndAdd: function(items, filter, negate, pr, path, name) {
+        items = items.filter(function(item) {
+          return Boolean(pr) == Boolean(item.pull_request);
+        });
+        items = !filter ? items : items.filter(function(item) {
+          var ret = false;
+          for (var i=0; i<item.labels.length; i++) {
+            if (item.labels[i].name.match(filter)) {
+              ret = ret || true;
+            }
+          }
+          return negate ? !ret : ret;
+        });
+        // Update repo
+        var repoPath = path.join('.');
+        var curr = this.get([repoPath, name]) || [];
+        curr = curr.concat(items);
+        this.set([repoPath, name], curr);
+        // Update maintainer
+        var maintPath = path.slice(0, -2).join('.');
+        curr = this.get([maintPath, name]) || [];
+        curr = curr.concat(items);
+        this.set([maintPath, name], curr);
+        // Update lead
+        var leadPath = path.slice(0, -4).join('.');
+        curr = this.get([leadPath, name]) || [];
+        curr = curr.concat(items);
+        this.set([leadPath, name], curr);
+        // Update all
+        var allPath = path.slice(0, -6).join('.');
+        curr = this.get([allPath, name]) || [];
+        curr = curr.concat(items);
+        this.set([allPath, name], curr);
+      },
+      _toggleDetails: function(e) {
+        e.model.set('item.detailsOpen', !e.model.item.detailsOpen);
+      },
+      _toggleAllDetails: function(toggleMaintainers) {
+        var open = toggleMaintainers ?
+          !this.all.leads[0].detailsOpen ||
+          !this.all.leads[0].maintainers[0].detailsOpen :
+          !this.all.leads[0].detailsOpen;
+        for (var i=0; i<this.all.leads.length; i++) {
+          var lead = this.all.leads[i];
+          if (toggleMaintainers) {
+            for (var j=0; j<lead.maintainers.length; j++) {
+              this.set(['all.leads', i, 'maintainers', j, 'detailsOpen'], open);
+            }
+            if (open) {
+              this.set(['all.leads', i, 'detailsOpen'], open);
+            }
+          } else {
+            this.set(['all.leads', i, 'detailsOpen'], open);
+          }
+        }
+      },
+      _toggleLeads: function() {
+        this._toggleAllDetails(false);
+      },
+      _toggleMaintainers: function() {
+        this._toggleAllDetails(true);
+      },
+      _handleUntriagedError: function(xhr) {
+        this.status = 'Error: ' + xhr.status;
+        this._requestQueue.shift();
+        this._requestUntriaged();
+      },
+      _autoRefreshChanged: function(refresh) {
+        if (!refresh) {
+          if (this._refreshId) {
+            clearTimeout(this._refreshId);
+            this.nextRefreshStatus = 'Auto refresh off';
+          }
+        } else if (!this._requestQueue || !this._requestQueue.length) {
+          this._queueRefresh();
+        }
+      },
+      _queueRefresh: function() {
+        if (this.autoRefresh) {
+          this._refreshId = setTimeout(this.refresh.bind(this),
+            this.autoRefreshInterval);
+          this.nextRefreshStatus = 'Next refresh at ' +
+            new Date(Date.now() + this.autoRefreshInterval).toLocaleTimeString();
+        }
+      }
+    });
+  </script>
+
+</dom-module>
