@@ -19915,7 +19915,8 @@ this._filterAndAdd(response, /^p1/i, false, false, repo.path, 'p1');
 this._filterAndAdd(response, /^p2/i, false, false, repo.path, 'p2');
 this._filterAndAdd(response, null, false, true, repo.path, 'prs');
 var link = xhr.getResponseHeader('Link');
-repo.next = link && xhr.getResponseHeader('Link').match(/<([^>]*)>; rel="next"/)[1];
+var matches = link && link.match(/<([^>]*)>; rel="next"/);
+repo.next = matches && matches[1];
 if (!repo.next) {
 this._requestQueue.shift();
 }
