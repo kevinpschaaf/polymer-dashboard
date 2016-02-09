@@ -19820,7 +19820,7 @@ this.$.githubAuth.login();
 }
 },
 refresh: function () {
-this._refresh(this._leads);
+this._refresh(this._leads, this.githubUser);
 },
 _rowsChanged: function (rows) {
 var leads = {};
@@ -19903,7 +19903,7 @@ this._updateRateLimit(60);
 } else {
 this.status = 'Error: ' + xhr.status;
 repo.next = null;
-this._requestQueue.shift();
+this.shift('_requestQueue');
 this._requestUntriaged();
 }
 } else {
@@ -19918,7 +19918,7 @@ var link = xhr.getResponseHeader('Link');
 var matches = link && link.match(/<([^>]*)>; rel="next"/);
 repo.next = matches && matches[1];
 if (!repo.next) {
-this._requestQueue.shift();
+this.shift('_requestQueue');
 }
 this._requestUntriaged();
 }
@@ -20018,7 +20018,7 @@ this._toggleAllDetails(true);
 },
 _handleUntriagedError: function (xhr) {
 this.status = 'Error: ' + xhr.status;
-this._requestQueue.shift();
+this.shift('_requestQueue');
 this._requestUntriaged();
 },
 _autoRefreshChanged: function (refresh) {
