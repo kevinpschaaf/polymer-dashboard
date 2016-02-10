@@ -16,6 +16,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <link rel="import" href="../bower_components/google-signin/google-signin.html">
 <link rel="import" href="../bower_components/google-sheets/google-sheets.html">
 <link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-checkbox/paper-checkbox.html">
 <link rel="import" href="../bower_components/paper-styles/color.html">
 <link rel="import" href="../bower_components/paper-toggle-button/paper-toggle-button.html">
 <link rel="import" href="../bower_components/paper-toolbar/paper-toolbar.html">
@@ -81,8 +82,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         width: 80px;
       }
 
-      paper-toggle-button {
-        --paper-toggle-button-label-color: var(--paper-blue-grey-700);
+      paper-checkbox {
+        --paper-checkbox-label-color: var(--paper-blue-grey-700);
         font-size: 14px;
         margin-right: 15px;
       }
@@ -96,8 +97,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       <span class="title">Polymer Elements Issues</span>
 
       <div id="actionButtons" class="horizontal" hidden$="[[!_shouldShowResults(googleUser,githubUser)]]">
-        <paper-toggle-button on-tap="_toggleLeads">Toggle leads</paper-toggle-button>
-        <paper-toggle-button on-tap="_toggleMaintainers">Toggle maintainers</paper-toggle-button>
+        <paper-checkbox on-tap="_toggleTeams" id="teamsOn" checked>Expand teams</paper-checkbox>
+        <paper-checkbox on-tap="_toggleRepos" id="reposOn" checked>Expand repos</paper-checkbox>
       </div>
 
       <paper-button id="googleButton" on-tap="toggleGoogleLogin" raised>
@@ -383,31 +384,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       _toggleDetails: function(e) {
         e.model.set('item.detailsOpen', !e.model.item.detailsOpen);
       },
-      _toggleAllDetails: function(toggleMaintainers) {
-        var open = toggleMaintainers ?
-          !this.all.leads[0].detailsOpen ||
-          !this.all.leads[0].maintainers[0].detailsOpen :
-          !this.all.leads[0].detailsOpen;
-        for (var i=0; i<this.all.leads.length; i++) {
-          var lead = this.all.leads[i];
-          if (toggleMaintainers) {
-            for (var j=0; j<lead.maintainers.length; j++) {
-              this.set(['all.leads', i, 'maintainers', j, 'detailsOpen'], open);
-            }
-            if (open) {
-              this.set(['all.leads', i, 'detailsOpen'], open);
-            }
-          } else {
-            this.set(['all.leads', i, 'detailsOpen'], open);
-          }
-        }
-      },
-      _toggleLeads: function() {
-        this._toggleAllDetails(false);
-      },
-      _toggleMaintainers: function() {
-        this._toggleAllDetails(true);
-      },
       _handleUntriagedError: function(xhr) {
         this.status = 'Error: ' + xhr.status;
         this.shift('_requestQueue');
@@ -429,6 +405,23 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             this.autoRefreshInterval);
           this.nextRefreshStatus = 'Next refresh at ' +
             new Date(Date.now() + this.autoRefreshInterval).toLocaleTimeString();
+        }
+      },
+      _toggleTeams: function() {
+        // For each lead, hide or show their details.
+        for (var i = 0; i < this.all.leads.length; i++) {
+          var lead = this.all.leads[i];
+          this.set(['all.leads', i, 'detailsOpen'], this.$.teamsOn.checked);
+        }
+      },
+      _toggleRepos: function() {
+        // For each maintainer, show or hide their repos.
+        for (var i = 0; i < this.all.leads.length; i++) {
+          var lead = this.all.leads[i];
+
+          for (var j=0; j<lead.maintainers.length; j++) {
+            this.set(['all.leads', i, 'maintainers', j, 'detailsOpen'], this.$.reposOn.checked);
+          }
         }
       },
       _shouldShowResults(googleUser, githubUser) {
