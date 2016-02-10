@@ -9949,2473 +9949,6 @@ this._insertChildren();
 this.fire('dom-change');
 }
 });
-(function () {
-'use strict';
-Polymer.IronJsonpLibraryBehavior = {
-properties: {
-libraryLoaded: {
-type: Boolean,
-value: false,
-notify: true,
-readOnly: true
-},
-libraryErrorMessage: {
-type: String,
-value: null,
-notify: true,
-readOnly: true
-}
-},
-observers: ['_libraryUrlChanged(libraryUrl)'],
-_libraryUrlChanged: function (libraryUrl) {
-if (this._isReady && this.libraryUrl)
-this._loadLibrary();
-},
-_libraryLoadCallback: function (err, result) {
-if (err) {
-console.warn('Library load failed:', err.message);
-this._setLibraryErrorMessage(err.message);
-} else {
-this._setLibraryErrorMessage(null);
-this._setLibraryLoaded(true);
-if (this.notifyEvent)
-this.fire(this.notifyEvent, result);
-}
-},
-_loadLibrary: function () {
-LoaderMap.require(this.libraryUrl, this._libraryLoadCallback.bind(this), this.callbackName);
-},
-ready: function () {
-this._isReady = true;
-if (this.libraryUrl)
-this._loadLibrary();
-}
-};
-var LoaderMap = {
-apiMap: {},
-require: function (url, notifyCallback, jsonpCallbackName) {
-var name = this.nameFromUrl(url);
-if (!this.apiMap[name])
-this.apiMap[name] = new Loader(name, url, jsonpCallbackName);
-this.apiMap[name].requestNotify(notifyCallback);
-},
-nameFromUrl: function (url) {
-return url.replace(/[\:\/\%\?\&\.\=\-\,]/g, '_') + '_api';
-}
-};
-var Loader = function (name, url, callbackName) {
-this.notifiers = [];
-if (!callbackName) {
-if (url.indexOf(this.callbackMacro) >= 0) {
-callbackName = name + '_loaded';
-url = url.replace(this.callbackMacro, callbackName);
-} else {
-this.error = new Error('IronJsonpLibraryBehavior a %%callback%% parameter is required in libraryUrl');
-return;
-}
-}
-this.callbackName = callbackName;
-window[this.callbackName] = this.success.bind(this);
-this.addScript(url);
-};
-Loader.prototype = {
-callbackMacro: '%%callback%%',
-loaded: false,
-addScript: function (src) {
-var script = document.createElement('script');
-script.src = src;
-script.onerror = this.handleError.bind(this);
-var s = document.querySelector('script') || document.body;
-s.parentNode.insertBefore(script, s);
-this.script = script;
-},
-removeScript: function () {
-if (this.script.parentNode) {
-this.script.parentNode.removeChild(this.script);
-}
-this.script = null;
-},
-handleError: function (ev) {
-this.error = new Error('Library failed to load');
-this.notifyAll();
-this.cleanup();
-},
-success: function () {
-this.loaded = true;
-this.result = Array.prototype.slice.call(arguments);
-this.notifyAll();
-this.cleanup();
-},
-cleanup: function () {
-delete window[this.callbackName];
-},
-notifyAll: function () {
-this.notifiers.forEach(function (notifyCallback) {
-notifyCallback(this.error, this.result);
-}.bind(this));
-this.notifiers = [];
-},
-requestNotify: function (notifyCallback) {
-if (this.loaded || this.error) {
-notifyCallback(this.error, this.result);
-} else {
-this.notifiers.push(notifyCallback);
-}
-}
-};
-}());
-Polymer({
-is: 'iron-jsonp-library',
-behaviors: [Polymer.IronJsonpLibraryBehavior],
-properties: {
-libraryUrl: String,
-callbackName: String,
-notifyEvent: String
-}
-});
-Polymer({
-is: 'google-js-api',
-behaviors: [Polymer.IronJsonpLibraryBehavior],
-properties: {
-libraryUrl: {
-type: String,
-value: 'https://apis.google.com/js/api.js?onload=%%callback%%'
-},
-notifyEvent: {
-type: String,
-value: 'js-api-load'
-}
-},
-get api() {
-return gapi;
-}
-});
-(function () {
-var ProxyLoginAttributes = {
-'appPackageName': 'apppackagename',
-'clientId': 'clientid',
-'cookiePolicy': 'cookiepolicy',
-'requestVisibleActions': 'requestvisibleactions',
-'hostedDomain': 'hostedDomain'
-};
-var AuthEngine = {
-_clientId: null,
-get clientId() {
-return this._clientId;
-},
-set clientId(val) {
-if (this._clientId && val && val != this._clientId) {
-throw new Error('clientId cannot change. Values do not match. New: ' + val + ' Old:' + this._clientId);
-}
-if (val) {
-this._clientId = val;
-this.initAuth2();
-}
-},
-_cookiePolicy: 'single_host_origin',
-get cookiePolicy() {
-return this._cookiePolicy;
-},
-set cookiePolicy(val) {
-if (val) {
-this._cookiePolicy = val;
-}
-},
-_appPackageName: '',
-get appPackageName() {
-return this._appPackageName;
-},
-set appPackageName(val) {
-if (this._appPackageName && val && val != this._appPackageName) {
-throw new Error('appPackageName cannot change. Values do not match. New: ' + val + ' Old: ' + this._appPackageName);
-}
-if (val) {
-this._appPackageName = val;
-}
-},
-_requestVisibleActions: '',
-get requestVisibleactions() {
-return this._requestVisibleActions;
-},
-set requestVisibleactions(val) {
-if (this._requestVisibleActions && val && val != this._requestVisibleActions) {
-throw new Error('requestVisibleactions cannot change. Values do not match. New: ' + val + ' Old: ' + this._requestVisibleActions);
-}
-if (val)
-this._requestVisibleActions = val;
-},
-_hostedDomain: '',
-get hostedDomain() {
-return this._hostedDomain;
-},
-set hostedDomain(val) {
-if (this._hostedDomain && val && val != this._hostedDomain) {
-throw new Error('hostedDomain cannot change. Values do not match. New: ' + val + ' Old: ' + this._hostedDomain);
-}
-if (val)
-this._hostedDomain = val;
-},
-_offline: false,
-get offline() {
-return this._offline;
-},
-set offline(val) {
-this._offline = val;
-this.updateAdditionalAuth();
-},
-_offlineAlwaysPrompt: false,
-get offlineAlwaysPrompt() {
-return this._offlineAlwaysPrompt;
-},
-set offlineAlwaysPrompt(val) {
-this._offlineAlwaysPrompt = val;
-this.updateAdditionalAuth();
-},
-offlineGranted: false,
-_apiLoader: null,
-_requestedScopeArray: [],
-get requestedScopes() {
-return this._requestedScopeArray.join(' ');
-},
-_signedIn: false,
-_grantedScopeArray: [],
-_needAdditionalAuth: true,
-_hasPlusScopes: false,
-signinAwares: [],
-init: function () {
-this._apiLoader = document.createElement('google-js-api');
-this._apiLoader.addEventListener('js-api-load', this.loadAuth2.bind(this));
-},
-loadAuth2: function () {
-gapi.load('auth2', this.initAuth2.bind(this));
-},
-initAuth2: function () {
-if (!('gapi' in window) || !('auth2' in window.gapi) || !this.clientId) {
-return;
-}
-var auth = gapi.auth2.init({
-'client_id': this.clientId,
-'cookie_policy': this.cookiePolicy,
-'scope': this.requestedScopes,
-'hosted_domain': this.hostedDomain
-});
-auth.currentUser.listen(this.handleUserUpdate.bind(this));
-auth.then(function success() {
-}, function error(error) {
-console.error(error);
-});
-},
-handleUserUpdate: function (newPrimaryUser) {
-var isSignedIn = newPrimaryUser.isSignedIn();
-if (isSignedIn != this._signedIn) {
-this._signedIn = isSignedIn;
-for (var i = 0; i < this.signinAwares.length; i++) {
-this.signinAwares[i]._setSignedIn(isSignedIn);
-}
-}
-this._grantedScopeArray = this.strToScopeArray(newPrimaryUser.getGrantedScopes());
-this.updateAdditionalAuth();
-var response = newPrimaryUser.getAuthResponse();
-for (var i = 0; i < this.signinAwares.length; i++) {
-this.signinAwares[i]._updateScopeStatus(response);
-}
-},
-setOfflineCode: function (code) {
-for (var i = 0; i < this.signinAwares.length; i++) {
-this.signinAwares[i]._updateOfflineCode(code);
-}
-},
-strToScopeArray: function (str) {
-if (!str) {
-return [];
-}
-var scopes = str.replace(/\ +/g, ' ').trim().split(' ');
-for (var i = 0; i < scopes.length; i++) {
-scopes[i] = scopes[i].toLowerCase();
-if (scopes[i] === 'https://www.googleapis.com/auth/userinfo.profile') {
-scopes[i] = 'profile';
-}
-if (scopes[i] === 'https://www.googleapis.com/auth/userinfo.email') {
-scopes[i] = 'email';
-}
-}
-return scopes.filter(function (value, index, self) {
-return self.indexOf(value) === index;
-});
-},
-isPlusScope: function (scope) {
-return scope.indexOf('/auth/games') > -1 || scope.indexOf('auth/plus.') > -1 && scope.indexOf('auth/plus.me') < 0;
-},
-hasGrantedScopes: function (scopeStr) {
-var scopes = this.strToScopeArray(scopeStr);
-for (var i = 0; i < scopes.length; i++) {
-if (this._grantedScopeArray.indexOf(scopes[i]) === -1)
-return false;
-}
-return true;
-},
-requestScopes: function (newScopeStr) {
-var newScopes = this.strToScopeArray(newScopeStr);
-var scopesUpdated = false;
-for (var i = 0; i < newScopes.length; i++) {
-if (this._requestedScopeArray.indexOf(newScopes[i]) === -1) {
-this._requestedScopeArray.push(newScopes[i]);
-scopesUpdated = true;
-}
-}
-if (scopesUpdated) {
-this.updateAdditionalAuth();
-this.updatePlusScopes();
-}
-},
-updateAdditionalAuth: function () {
-var needMoreAuth = false;
-if ((this.offlineAlwaysPrompt || this.offline) && !this.offlineGranted) {
-needMoreAuth = true;
-} else {
-for (var i = 0; i < this._requestedScopeArray.length; i++) {
-if (this._grantedScopeArray.indexOf(this._requestedScopeArray[i]) === -1) {
-needMoreAuth = true;
-break;
-}
-}
-}
-if (this._needAdditionalAuth != needMoreAuth) {
-this._needAdditionalAuth = needMoreAuth;
-for (var i = 0; i < this.signinAwares.length; i++) {
-this.signinAwares[i]._setNeedAdditionalAuth(needMoreAuth);
-}
-}
-},
-updatePlusScopes: function () {
-var hasPlusScopes = false;
-for (var i = 0; i < this._requestedScopeArray.length; i++) {
-if (this.isPlusScope(this._requestedScopeArray[i])) {
-hasPlusScopes = true;
-break;
-}
-}
-if (this._hasPlusScopes != hasPlusScopes) {
-this._hasPlusScopes = hasPlusScopes;
-for (var i = 0; i < this.signinAwares.length; i++) {
-this.signinAwares[i]._setHasPlusScopes(hasPlusScopes);
-}
-}
-},
-attachSigninAware: function (aware) {
-if (this.signinAwares.indexOf(aware) == -1) {
-this.signinAwares.push(aware);
-aware._setNeedAdditionalAuth(this._needAdditionalAuth);
-aware._setSignedIn(this._signedIn);
-aware._setHasPlusScopes(this._hasPlusScopes);
-} else {
-console.warn('signinAware attached more than once', aware);
-}
-},
-detachSigninAware: function (aware) {
-var index = this.signinAwares.indexOf(aware);
-if (index != -1) {
-this.signinAwares.splice(index, 1);
-} else {
-console.warn('Trying to detach unattached signin-aware');
-}
-},
-getMissingScopes: function () {
-return this._requestedScopeArray.filter(function (scope) {
-return this._grantedScopeArray.indexOf(scope) === -1;
-}.bind(this)).join(' ');
-},
-assertAuthInitialized: function () {
-if (!this.clientId) {
-throw new Error('AuthEngine not initialized. clientId has not been configured.');
-}
-if (!('gapi' in window)) {
-throw new Error('AuthEngine not initialized. gapi has not loaded.');
-}
-if (!('auth2' in window.gapi)) {
-throw new Error('AuthEngine not initialized. auth2 not loaded.');
-}
-},
-signIn: function () {
-this.assertAuthInitialized();
-var params = { 'scope': this.getMissingScopes() };
-Object.keys(ProxyLoginAttributes).forEach(function (key) {
-if (this[key] && this[key] !== '') {
-params[ProxyLoginAttributes[key]] = this[key];
-}
-}, this);
-var promise;
-var user = gapi.auth2.getAuthInstance().currentUser.get();
-if (!(this.offline || this.offlineAlwaysPrompt)) {
-if (user.getGrantedScopes()) {
-promise = user.grant(params);
-} else {
-promise = gapi.auth2.getAuthInstance().signIn(params);
-}
-} else {
-params.redirect_uri = 'postmessage';
-if (this.offlineAlwaysPrompt) {
-params.approval_prompt = 'force';
-}
-promise = gapi.auth2.getAuthInstance().grantOfflineAccess(params);
-}
-promise.then(function success(response) {
-var newUser;
-if (response.code) {
-AuthEngine.offlineGranted = true;
-newUser = gapi.auth2.getAuthInstance().currentUser.get();
-AuthEngine.setOfflineCode(response.code);
-} else {
-newUser = response;
-}
-var authResponse = newUser.getAuthResponse();
-}, function error(error) {
-if ('Access denied.' == error.reason) {
-return;
-} else {
-console.error(error);
-}
-});
-},
-signOut: function () {
-this.assertAuthInitialized();
-gapi.auth2.getAuthInstance().signOut().then(function success() {
-}, function error(error) {
-console.error(error);
-});
-}
-};
-AuthEngine.init();
-Polymer({
-is: 'google-signin-aware',
-properties: {
-appPackageName: {
-type: String,
-observer: '_appPackageNameChanged'
-},
-clientId: {
-type: String,
-observer: '_clientIdChanged'
-},
-cookiePolicy: {
-type: String,
-observer: '_cookiePolicyChanged'
-},
-requestVisibleActions: {
-type: String,
-observer: '_requestVisibleActionsChanged'
-},
-hostedDomain: {
-type: String,
-observer: '_hostedDomainChanged'
-},
-offline: {
-type: Boolean,
-value: false,
-observer: '_offlineChanged'
-},
-offlineAlwaysPrompt: {
-type: Boolean,
-value: false,
-observer: '_offlineAlwaysPromptChanged'
-},
-scopes: {
-type: String,
-value: 'profile',
-observer: '_scopesChanged'
-},
-signedIn: {
-type: Boolean,
-notify: true,
-readOnly: true
-},
-isAuthorized: {
-type: Boolean,
-notify: true,
-readOnly: true,
-value: false
-},
-needAdditionalAuth: {
-type: Boolean,
-notify: true,
-readOnly: true
-},
-hasPlusScopes: {
-type: Boolean,
-value: false,
-notify: true,
-readOnly: true
-}
-},
-attached: function () {
-AuthEngine.attachSigninAware(this);
-},
-detached: function () {
-AuthEngine.detachSigninAware(this);
-},
-signIn: function () {
-AuthEngine.signIn();
-},
-signOut: function () {
-AuthEngine.signOut();
-},
-_appPackageNameChanged: function (newName, oldName) {
-AuthEngine.appPackageName = newName;
-},
-_clientIdChanged: function (newId, oldId) {
-AuthEngine.clientId = newId;
-},
-_cookiePolicyChanged: function (newPolicy, oldPolicy) {
-AuthEngine.cookiePolicy = newPolicy;
-},
-_requestVisibleActionsChanged: function (newVal, oldVal) {
-AuthEngine.requestVisibleActions = newVal;
-},
-_hostedDomainChanged: function (newVal, oldVal) {
-AuthEngine.hostedDomain = newVal;
-},
-_offlineChanged: function (newVal, oldVal) {
-AuthEngine.offline = newVal;
-},
-_offlineAlwaysPromptChanged: function (newVal, oldVal) {
-AuthEngine.offlineAlwaysPrompt = newVal;
-},
-_scopesChanged: function (newVal, oldVal) {
-AuthEngine.requestScopes(newVal);
-this._updateScopeStatus();
-},
-_updateScopeStatus: function (user) {
-var newAuthorized = this.signedIn && AuthEngine.hasGrantedScopes(this.scopes);
-if (newAuthorized !== this.isAuthorized) {
-this._setIsAuthorized(newAuthorized);
-if (newAuthorized) {
-this.fire('google-signin-aware-success', user);
-} else {
-this.fire('google-signin-aware-signed-out', user);
-}
-}
-},
-_updateOfflineCode: function (code) {
-if (code) {
-this.fire('google-signin-offline-success', { code: code });
-}
-}
-});
-}());
-(function () {
-var metaDatas = {};
-var metaArrays = {};
-var singleton = null;
-Polymer.IronMeta = Polymer({
-is: 'iron-meta',
-properties: {
-type: {
-type: String,
-value: 'default',
-observer: '_typeChanged'
-},
-key: {
-type: String,
-observer: '_keyChanged'
-},
-value: {
-type: Object,
-notify: true,
-observer: '_valueChanged'
-},
-self: {
-type: Boolean,
-observer: '_selfChanged'
-},
-list: {
-type: Array,
-notify: true
-}
-},
-hostAttributes: { hidden: true },
-factoryImpl: function (config) {
-if (config) {
-for (var n in config) {
-switch (n) {
-case 'type':
-case 'key':
-case 'value':
-this[n] = config[n];
-break;
-}
-}
-}
-},
-created: function () {
-this._metaDatas = metaDatas;
-this._metaArrays = metaArrays;
-},
-_keyChanged: function (key, old) {
-this._resetRegistration(old);
-},
-_valueChanged: function (value) {
-this._resetRegistration(this.key);
-},
-_selfChanged: function (self) {
-if (self) {
-this.value = this;
-}
-},
-_typeChanged: function (type) {
-this._unregisterKey(this.key);
-if (!metaDatas[type]) {
-metaDatas[type] = {};
-}
-this._metaData = metaDatas[type];
-if (!metaArrays[type]) {
-metaArrays[type] = [];
-}
-this.list = metaArrays[type];
-this._registerKeyValue(this.key, this.value);
-},
-byKey: function (key) {
-return this._metaData && this._metaData[key];
-},
-_resetRegistration: function (oldKey) {
-this._unregisterKey(oldKey);
-this._registerKeyValue(this.key, this.value);
-},
-_unregisterKey: function (key) {
-this._unregister(key, this._metaData, this.list);
-},
-_registerKeyValue: function (key, value) {
-this._register(key, value, this._metaData, this.list);
-},
-_register: function (key, value, data, list) {
-if (key && data && value !== undefined) {
-data[key] = value;
-list.push(value);
-}
-},
-_unregister: function (key, data, list) {
-if (key && data) {
-if (key in data) {
-var value = data[key];
-delete data[key];
-this.arrayDelete(list, value);
-}
-}
-}
-});
-Polymer.IronMeta.getIronMeta = function getIronMeta() {
-if (singleton === null) {
-singleton = new Polymer.IronMeta();
-}
-return singleton;
-};
-Polymer.IronMetaQuery = Polymer({
-is: 'iron-meta-query',
-properties: {
-type: {
-type: String,
-value: 'default',
-observer: '_typeChanged'
-},
-key: {
-type: String,
-observer: '_keyChanged'
-},
-value: {
-type: Object,
-notify: true,
-readOnly: true
-},
-list: {
-type: Array,
-notify: true
-}
-},
-factoryImpl: function (config) {
-if (config) {
-for (var n in config) {
-switch (n) {
-case 'type':
-case 'key':
-this[n] = config[n];
-break;
-}
-}
-}
-},
-created: function () {
-this._metaDatas = metaDatas;
-this._metaArrays = metaArrays;
-},
-_keyChanged: function (key) {
-this._setValue(this._metaData && this._metaData[key]);
-},
-_typeChanged: function (type) {
-this._metaData = metaDatas[type];
-this.list = metaArrays[type];
-if (this.key) {
-this._keyChanged(this.key);
-}
-},
-byKey: function (key) {
-return this._metaData && this._metaData[key];
-}
-});
-}());
-Polymer({
-is: 'iron-icon',
-properties: {
-icon: {
-type: String,
-observer: '_iconChanged'
-},
-theme: {
-type: String,
-observer: '_updateIcon'
-},
-src: {
-type: String,
-observer: '_srcChanged'
-},
-_meta: { value: Polymer.Base.create('iron-meta', { type: 'iconset' }) }
-},
-_DEFAULT_ICONSET: 'icons',
-_iconChanged: function (icon) {
-var parts = (icon || '').split(':');
-this._iconName = parts.pop();
-this._iconsetName = parts.pop() || this._DEFAULT_ICONSET;
-this._updateIcon();
-},
-_srcChanged: function (src) {
-this._updateIcon();
-},
-_usesIconset: function () {
-return this.icon || !this.src;
-},
-_updateIcon: function () {
-if (this._usesIconset()) {
-if (this._iconsetName) {
-this._iconset = this._meta.byKey(this._iconsetName);
-if (this._iconset) {
-this._iconset.applyIcon(this, this._iconName, this.theme);
-this.unlisten(window, 'iron-iconset-added', '_updateIcon');
-} else {
-this.listen(window, 'iron-iconset-added', '_updateIcon');
-}
-}
-} else {
-if (!this._img) {
-this._img = document.createElement('img');
-this._img.style.width = '100%';
-this._img.style.height = '100%';
-this._img.draggable = false;
-}
-this._img.src = this.src;
-Polymer.dom(this.root).appendChild(this._img);
-}
-}
-});
-(function () {
-'use strict';
-var KEY_IDENTIFIER = {
-'U+0008': 'backspace',
-'U+0009': 'tab',
-'U+001B': 'esc',
-'U+0020': 'space',
-'U+007F': 'del'
-};
-var KEY_CODE = {
-8: 'backspace',
-9: 'tab',
-13: 'enter',
-27: 'esc',
-33: 'pageup',
-34: 'pagedown',
-35: 'end',
-36: 'home',
-32: 'space',
-37: 'left',
-38: 'up',
-39: 'right',
-40: 'down',
-46: 'del',
-106: '*'
-};
-var MODIFIER_KEYS = {
-'shift': 'shiftKey',
-'ctrl': 'ctrlKey',
-'alt': 'altKey',
-'meta': 'metaKey'
-};
-var KEY_CHAR = /[a-z0-9*]/;
-var IDENT_CHAR = /U\+/;
-var ARROW_KEY = /^arrow/;
-var SPACE_KEY = /^space(bar)?/;
-function transformKey(key, noSpecialChars) {
-var validKey = '';
-if (key) {
-var lKey = key.toLowerCase();
-if (lKey === ' ' || SPACE_KEY.test(lKey)) {
-validKey = 'space';
-} else if (lKey.length == 1) {
-if (!noSpecialChars || KEY_CHAR.test(lKey)) {
-validKey = lKey;
-}
-} else if (ARROW_KEY.test(lKey)) {
-validKey = lKey.replace('arrow', '');
-} else if (lKey == 'multiply') {
-validKey = '*';
-} else {
-validKey = lKey;
-}
-}
-return validKey;
-}
-function transformKeyIdentifier(keyIdent) {
-var validKey = '';
-if (keyIdent) {
-if (keyIdent in KEY_IDENTIFIER) {
-validKey = KEY_IDENTIFIER[keyIdent];
-} else if (IDENT_CHAR.test(keyIdent)) {
-keyIdent = parseInt(keyIdent.replace('U+', '0x'), 16);
-validKey = String.fromCharCode(keyIdent).toLowerCase();
-} else {
-validKey = keyIdent.toLowerCase();
-}
-}
-return validKey;
-}
-function transformKeyCode(keyCode) {
-var validKey = '';
-if (Number(keyCode)) {
-if (keyCode >= 65 && keyCode <= 90) {
-validKey = String.fromCharCode(32 + keyCode);
-} else if (keyCode >= 112 && keyCode <= 123) {
-validKey = 'f' + (keyCode - 112);
-} else if (keyCode >= 48 && keyCode <= 57) {
-validKey = String(48 - keyCode);
-} else if (keyCode >= 96 && keyCode <= 105) {
-validKey = String(96 - keyCode);
-} else {
-validKey = KEY_CODE[keyCode];
-}
-}
-return validKey;
-}
-function normalizedKeyForEvent(keyEvent, noSpecialChars) {
-return transformKey(keyEvent.key, noSpecialChars) || transformKeyIdentifier(keyEvent.keyIdentifier) || transformKeyCode(keyEvent.keyCode) || transformKey(keyEvent.detail.key, noSpecialChars) || '';
-}
-function keyComboMatchesEvent(keyCombo, event) {
-var keyEvent = normalizedKeyForEvent(event, keyCombo.hasModifiers);
-return keyEvent === keyCombo.key && (!keyCombo.hasModifiers || !!event.shiftKey === !!keyCombo.shiftKey && !!event.ctrlKey === !!keyCombo.ctrlKey && !!event.altKey === !!keyCombo.altKey && !!event.metaKey === !!keyCombo.metaKey);
-}
-function parseKeyComboString(keyComboString) {
-if (keyComboString.length === 1) {
-return {
-combo: keyComboString,
-key: keyComboString,
-event: 'keydown'
-};
-}
-return keyComboString.split('+').reduce(function (parsedKeyCombo, keyComboPart) {
-var eventParts = keyComboPart.split(':');
-var keyName = eventParts[0];
-var event = eventParts[1];
-if (keyName in MODIFIER_KEYS) {
-parsedKeyCombo[MODIFIER_KEYS[keyName]] = true;
-parsedKeyCombo.hasModifiers = true;
-} else {
-parsedKeyCombo.key = keyName;
-parsedKeyCombo.event = event || 'keydown';
-}
-return parsedKeyCombo;
-}, { combo: keyComboString.split(':').shift() });
-}
-function parseEventString(eventString) {
-return eventString.trim().split(' ').map(function (keyComboString) {
-return parseKeyComboString(keyComboString);
-});
-}
-Polymer.IronA11yKeysBehavior = {
-properties: {
-keyEventTarget: {
-type: Object,
-value: function () {
-return this;
-}
-},
-stopKeyboardEventPropagation: {
-type: Boolean,
-value: false
-},
-_boundKeyHandlers: {
-type: Array,
-value: function () {
-return [];
-}
-},
-_imperativeKeyBindings: {
-type: Object,
-value: function () {
-return {};
-}
-}
-},
-observers: ['_resetKeyEventListeners(keyEventTarget, _boundKeyHandlers)'],
-keyBindings: {},
-registered: function () {
-this._prepKeyBindings();
-},
-attached: function () {
-this._listenKeyEventListeners();
-},
-detached: function () {
-this._unlistenKeyEventListeners();
-},
-addOwnKeyBinding: function (eventString, handlerName) {
-this._imperativeKeyBindings[eventString] = handlerName;
-this._prepKeyBindings();
-this._resetKeyEventListeners();
-},
-removeOwnKeyBindings: function () {
-this._imperativeKeyBindings = {};
-this._prepKeyBindings();
-this._resetKeyEventListeners();
-},
-keyboardEventMatchesKeys: function (event, eventString) {
-var keyCombos = parseEventString(eventString);
-for (var i = 0; i < keyCombos.length; ++i) {
-if (keyComboMatchesEvent(keyCombos[i], event)) {
-return true;
-}
-}
-return false;
-},
-_collectKeyBindings: function () {
-var keyBindings = this.behaviors.map(function (behavior) {
-return behavior.keyBindings;
-});
-if (keyBindings.indexOf(this.keyBindings) === -1) {
-keyBindings.push(this.keyBindings);
-}
-return keyBindings;
-},
-_prepKeyBindings: function () {
-this._keyBindings = {};
-this._collectKeyBindings().forEach(function (keyBindings) {
-for (var eventString in keyBindings) {
-this._addKeyBinding(eventString, keyBindings[eventString]);
-}
-}, this);
-for (var eventString in this._imperativeKeyBindings) {
-this._addKeyBinding(eventString, this._imperativeKeyBindings[eventString]);
-}
-for (var eventName in this._keyBindings) {
-this._keyBindings[eventName].sort(function (kb1, kb2) {
-var b1 = kb1[0].hasModifiers;
-var b2 = kb2[0].hasModifiers;
-return b1 === b2 ? 0 : b1 ? -1 : 1;
-});
-}
-},
-_addKeyBinding: function (eventString, handlerName) {
-parseEventString(eventString).forEach(function (keyCombo) {
-this._keyBindings[keyCombo.event] = this._keyBindings[keyCombo.event] || [];
-this._keyBindings[keyCombo.event].push([
-keyCombo,
-handlerName
-]);
-}, this);
-},
-_resetKeyEventListeners: function () {
-this._unlistenKeyEventListeners();
-if (this.isAttached) {
-this._listenKeyEventListeners();
-}
-},
-_listenKeyEventListeners: function () {
-Object.keys(this._keyBindings).forEach(function (eventName) {
-var keyBindings = this._keyBindings[eventName];
-var boundKeyHandler = this._onKeyBindingEvent.bind(this, keyBindings);
-this._boundKeyHandlers.push([
-this.keyEventTarget,
-eventName,
-boundKeyHandler
-]);
-this.keyEventTarget.addEventListener(eventName, boundKeyHandler);
-}, this);
-},
-_unlistenKeyEventListeners: function () {
-var keyHandlerTuple;
-var keyEventTarget;
-var eventName;
-var boundKeyHandler;
-while (this._boundKeyHandlers.length) {
-keyHandlerTuple = this._boundKeyHandlers.pop();
-keyEventTarget = keyHandlerTuple[0];
-eventName = keyHandlerTuple[1];
-boundKeyHandler = keyHandlerTuple[2];
-keyEventTarget.removeEventListener(eventName, boundKeyHandler);
-}
-},
-_onKeyBindingEvent: function (keyBindings, event) {
-if (this.stopKeyboardEventPropagation) {
-event.stopPropagation();
-}
-if (event.defaultPrevented) {
-return;
-}
-for (var i = 0; i < keyBindings.length; i++) {
-var keyCombo = keyBindings[i][0];
-var handlerName = keyBindings[i][1];
-if (keyComboMatchesEvent(keyCombo, event)) {
-this._triggerKeyHandler(keyCombo, handlerName, event);
-if (event.defaultPrevented) {
-return;
-}
-}
-}
-},
-_triggerKeyHandler: function (keyCombo, handlerName, keyboardEvent) {
-var detail = Object.create(keyCombo);
-detail.keyboardEvent = keyboardEvent;
-var event = new CustomEvent(keyCombo.event, {
-detail: detail,
-cancelable: true
-});
-this[handlerName].call(this, event);
-if (event.defaultPrevented) {
-keyboardEvent.preventDefault();
-}
-}
-};
-}());
-(function () {
-var Utility = {
-distance: function (x1, y1, x2, y2) {
-var xDelta = x1 - x2;
-var yDelta = y1 - y2;
-return Math.sqrt(xDelta * xDelta + yDelta * yDelta);
-},
-now: window.performance && window.performance.now ? window.performance.now.bind(window.performance) : Date.now
-};
-function ElementMetrics(element) {
-this.element = element;
-this.width = this.boundingRect.width;
-this.height = this.boundingRect.height;
-this.size = Math.max(this.width, this.height);
-}
-ElementMetrics.prototype = {
-get boundingRect() {
-return this.element.getBoundingClientRect();
-},
-furthestCornerDistanceFrom: function (x, y) {
-var topLeft = Utility.distance(x, y, 0, 0);
-var topRight = Utility.distance(x, y, this.width, 0);
-var bottomLeft = Utility.distance(x, y, 0, this.height);
-var bottomRight = Utility.distance(x, y, this.width, this.height);
-return Math.max(topLeft, topRight, bottomLeft, bottomRight);
-}
-};
-function Ripple(element) {
-this.element = element;
-this.color = window.getComputedStyle(element).color;
-this.wave = document.createElement('div');
-this.waveContainer = document.createElement('div');
-this.wave.style.backgroundColor = this.color;
-this.wave.classList.add('wave');
-this.waveContainer.classList.add('wave-container');
-Polymer.dom(this.waveContainer).appendChild(this.wave);
-this.resetInteractionState();
-}
-Ripple.MAX_RADIUS = 300;
-Ripple.prototype = {
-get recenters() {
-return this.element.recenters;
-},
-get center() {
-return this.element.center;
-},
-get mouseDownElapsed() {
-var elapsed;
-if (!this.mouseDownStart) {
-return 0;
-}
-elapsed = Utility.now() - this.mouseDownStart;
-if (this.mouseUpStart) {
-elapsed -= this.mouseUpElapsed;
-}
-return elapsed;
-},
-get mouseUpElapsed() {
-return this.mouseUpStart ? Utility.now() - this.mouseUpStart : 0;
-},
-get mouseDownElapsedSeconds() {
-return this.mouseDownElapsed / 1000;
-},
-get mouseUpElapsedSeconds() {
-return this.mouseUpElapsed / 1000;
-},
-get mouseInteractionSeconds() {
-return this.mouseDownElapsedSeconds + this.mouseUpElapsedSeconds;
-},
-get initialOpacity() {
-return this.element.initialOpacity;
-},
-get opacityDecayVelocity() {
-return this.element.opacityDecayVelocity;
-},
-get radius() {
-var width2 = this.containerMetrics.width * this.containerMetrics.width;
-var height2 = this.containerMetrics.height * this.containerMetrics.height;
-var waveRadius = Math.min(Math.sqrt(width2 + height2), Ripple.MAX_RADIUS) * 1.1 + 5;
-var duration = 1.1 - 0.2 * (waveRadius / Ripple.MAX_RADIUS);
-var timeNow = this.mouseInteractionSeconds / duration;
-var size = waveRadius * (1 - Math.pow(80, -timeNow));
-return Math.abs(size);
-},
-get opacity() {
-if (!this.mouseUpStart) {
-return this.initialOpacity;
-}
-return Math.max(0, this.initialOpacity - this.mouseUpElapsedSeconds * this.opacityDecayVelocity);
-},
-get outerOpacity() {
-var outerOpacity = this.mouseUpElapsedSeconds * 0.3;
-var waveOpacity = this.opacity;
-return Math.max(0, Math.min(outerOpacity, waveOpacity));
-},
-get isOpacityFullyDecayed() {
-return this.opacity < 0.01 && this.radius >= Math.min(this.maxRadius, Ripple.MAX_RADIUS);
-},
-get isRestingAtMaxRadius() {
-return this.opacity >= this.initialOpacity && this.radius >= Math.min(this.maxRadius, Ripple.MAX_RADIUS);
-},
-get isAnimationComplete() {
-return this.mouseUpStart ? this.isOpacityFullyDecayed : this.isRestingAtMaxRadius;
-},
-get translationFraction() {
-return Math.min(1, this.radius / this.containerMetrics.size * 2 / Math.sqrt(2));
-},
-get xNow() {
-if (this.xEnd) {
-return this.xStart + this.translationFraction * (this.xEnd - this.xStart);
-}
-return this.xStart;
-},
-get yNow() {
-if (this.yEnd) {
-return this.yStart + this.translationFraction * (this.yEnd - this.yStart);
-}
-return this.yStart;
-},
-get isMouseDown() {
-return this.mouseDownStart && !this.mouseUpStart;
-},
-resetInteractionState: function () {
-this.maxRadius = 0;
-this.mouseDownStart = 0;
-this.mouseUpStart = 0;
-this.xStart = 0;
-this.yStart = 0;
-this.xEnd = 0;
-this.yEnd = 0;
-this.slideDistance = 0;
-this.containerMetrics = new ElementMetrics(this.element);
-},
-draw: function () {
-var scale;
-var translateString;
-var dx;
-var dy;
-this.wave.style.opacity = this.opacity;
-scale = this.radius / (this.containerMetrics.size / 2);
-dx = this.xNow - this.containerMetrics.width / 2;
-dy = this.yNow - this.containerMetrics.height / 2;
-this.waveContainer.style.webkitTransform = 'translate(' + dx + 'px, ' + dy + 'px)';
-this.waveContainer.style.transform = 'translate3d(' + dx + 'px, ' + dy + 'px, 0)';
-this.wave.style.webkitTransform = 'scale(' + scale + ',' + scale + ')';
-this.wave.style.transform = 'scale3d(' + scale + ',' + scale + ',1)';
-},
-downAction: function (event) {
-var xCenter = this.containerMetrics.width / 2;
-var yCenter = this.containerMetrics.height / 2;
-this.resetInteractionState();
-this.mouseDownStart = Utility.now();
-if (this.center) {
-this.xStart = xCenter;
-this.yStart = yCenter;
-this.slideDistance = Utility.distance(this.xStart, this.yStart, this.xEnd, this.yEnd);
-} else {
-this.xStart = event ? event.detail.x - this.containerMetrics.boundingRect.left : this.containerMetrics.width / 2;
-this.yStart = event ? event.detail.y - this.containerMetrics.boundingRect.top : this.containerMetrics.height / 2;
-}
-if (this.recenters) {
-this.xEnd = xCenter;
-this.yEnd = yCenter;
-this.slideDistance = Utility.distance(this.xStart, this.yStart, this.xEnd, this.yEnd);
-}
-this.maxRadius = this.containerMetrics.furthestCornerDistanceFrom(this.xStart, this.yStart);
-this.waveContainer.style.top = (this.containerMetrics.height - this.containerMetrics.size) / 2 + 'px';
-this.waveContainer.style.left = (this.containerMetrics.width - this.containerMetrics.size) / 2 + 'px';
-this.waveContainer.style.width = this.containerMetrics.size + 'px';
-this.waveContainer.style.height = this.containerMetrics.size + 'px';
-},
-upAction: function (event) {
-if (!this.isMouseDown) {
-return;
-}
-this.mouseUpStart = Utility.now();
-},
-remove: function () {
-Polymer.dom(this.waveContainer.parentNode).removeChild(this.waveContainer);
-}
-};
-Polymer({
-is: 'paper-ripple',
-behaviors: [Polymer.IronA11yKeysBehavior],
-properties: {
-initialOpacity: {
-type: Number,
-value: 0.25
-},
-opacityDecayVelocity: {
-type: Number,
-value: 0.8
-},
-recenters: {
-type: Boolean,
-value: false
-},
-center: {
-type: Boolean,
-value: false
-},
-ripples: {
-type: Array,
-value: function () {
-return [];
-}
-},
-animating: {
-type: Boolean,
-readOnly: true,
-reflectToAttribute: true,
-value: false
-},
-holdDown: {
-type: Boolean,
-value: false,
-observer: '_holdDownChanged'
-},
-noink: {
-type: Boolean,
-value: false
-},
-_animating: { type: Boolean },
-_boundAnimate: {
-type: Function,
-value: function () {
-return this.animate.bind(this);
-}
-}
-},
-get target() {
-var ownerRoot = Polymer.dom(this).getOwnerRoot();
-var target;
-if (this.parentNode.nodeType == 11) {
-target = ownerRoot.host;
-} else {
-target = this.parentNode;
-}
-return target;
-},
-keyBindings: {
-'enter:keydown': '_onEnterKeydown',
-'space:keydown': '_onSpaceKeydown',
-'space:keyup': '_onSpaceKeyup'
-},
-attached: function () {
-this.keyEventTarget = this.target;
-this.listen(this.target, 'up', 'uiUpAction');
-this.listen(this.target, 'down', 'uiDownAction');
-},
-detached: function () {
-this.unlisten(this.target, 'up', 'uiUpAction');
-this.unlisten(this.target, 'down', 'uiDownAction');
-},
-get shouldKeepAnimating() {
-for (var index = 0; index < this.ripples.length; ++index) {
-if (!this.ripples[index].isAnimationComplete) {
-return true;
-}
-}
-return false;
-},
-simulatedRipple: function () {
-this.downAction(null);
-this.async(function () {
-this.upAction();
-}, 1);
-},
-uiDownAction: function (event) {
-if (!this.noink) {
-this.downAction(event);
-}
-},
-downAction: function (event) {
-if (this.holdDown && this.ripples.length > 0) {
-return;
-}
-var ripple = this.addRipple();
-ripple.downAction(event);
-if (!this._animating) {
-this.animate();
-}
-},
-uiUpAction: function (event) {
-if (!this.noink) {
-this.upAction(event);
-}
-},
-upAction: function (event) {
-if (this.holdDown) {
-return;
-}
-this.ripples.forEach(function (ripple) {
-ripple.upAction(event);
-});
-this.animate();
-},
-onAnimationComplete: function () {
-this._animating = false;
-this.$.background.style.backgroundColor = null;
-this.fire('transitionend');
-},
-addRipple: function () {
-var ripple = new Ripple(this);
-Polymer.dom(this.$.waves).appendChild(ripple.waveContainer);
-this.$.background.style.backgroundColor = ripple.color;
-this.ripples.push(ripple);
-this._setAnimating(true);
-return ripple;
-},
-removeRipple: function (ripple) {
-var rippleIndex = this.ripples.indexOf(ripple);
-if (rippleIndex < 0) {
-return;
-}
-this.ripples.splice(rippleIndex, 1);
-ripple.remove();
-if (!this.ripples.length) {
-this._setAnimating(false);
-}
-},
-animate: function () {
-var index;
-var ripple;
-this._animating = true;
-for (index = 0; index < this.ripples.length; ++index) {
-ripple = this.ripples[index];
-ripple.draw();
-this.$.background.style.opacity = ripple.outerOpacity;
-if (ripple.isOpacityFullyDecayed && !ripple.isRestingAtMaxRadius) {
-this.removeRipple(ripple);
-}
-}
-if (!this.shouldKeepAnimating && this.ripples.length === 0) {
-this.onAnimationComplete();
-} else {
-window.requestAnimationFrame(this._boundAnimate);
-}
-},
-_onEnterKeydown: function () {
-this.uiDownAction();
-this.async(this.uiUpAction, 1);
-},
-_onSpaceKeydown: function () {
-this.uiDownAction();
-},
-_onSpaceKeyup: function () {
-this.uiUpAction();
-},
-_holdDownChanged: function (newVal, oldVal) {
-if (oldVal === undefined) {
-return;
-}
-if (newVal) {
-this.downAction();
-} else {
-this.upAction();
-}
-}
-});
-}());
-Polymer({
-is: 'paper-material',
-properties: {
-elevation: {
-type: Number,
-reflectToAttribute: true,
-value: 1
-},
-animated: {
-type: Boolean,
-reflectToAttribute: true,
-value: false
-}
-}
-});
-Polymer({
-is: 'iron-iconset-svg',
-properties: {
-name: {
-type: String,
-observer: '_nameChanged'
-},
-size: {
-type: Number,
-value: 24
-}
-},
-attached: function () {
-this.style.display = 'none';
-},
-getIconNames: function () {
-this._icons = this._createIconMap();
-return Object.keys(this._icons).map(function (n) {
-return this.name + ':' + n;
-}, this);
-},
-applyIcon: function (element, iconName) {
-element = element.root || element;
-this.removeIcon(element);
-var svg = this._cloneIcon(iconName);
-if (svg) {
-var pde = Polymer.dom(element);
-pde.insertBefore(svg, pde.childNodes[0]);
-return element._svgIcon = svg;
-}
-return null;
-},
-removeIcon: function (element) {
-if (element._svgIcon) {
-Polymer.dom(element).removeChild(element._svgIcon);
-element._svgIcon = null;
-}
-},
-_nameChanged: function () {
-new Polymer.IronMeta({
-type: 'iconset',
-key: this.name,
-value: this
-});
-this.async(function () {
-this.fire('iron-iconset-added', this, { node: window });
-});
-},
-_createIconMap: function () {
-var icons = Object.create(null);
-Polymer.dom(this).querySelectorAll('[id]').forEach(function (icon) {
-icons[icon.id] = icon;
-});
-return icons;
-},
-_cloneIcon: function (id) {
-this._icons = this._icons || this._createIconMap();
-return this._prepareSvgClone(this._icons[id], this.size);
-},
-_prepareSvgClone: function (sourceSvg, size) {
-if (sourceSvg) {
-var content = sourceSvg.cloneNode(true), svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'), viewBox = content.getAttribute('viewBox') || '0 0 ' + size + ' ' + size;
-svg.setAttribute('viewBox', viewBox);
-svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-svg.style.cssText = 'pointer-events: none; display: block; width: 100%; height: 100%;';
-svg.appendChild(content).removeAttribute('id');
-return svg;
-}
-return null;
-}
-});
-(function () {
-var BrandValue = {
-GOOGLE: 'google',
-PLUS: 'google-plus'
-};
-var HeightValue = {
-SHORT: 'short',
-STANDARD: 'standard',
-TALL: 'tall'
-};
-var LabelValue = {
-STANDARD: 'Sign in',
-WIDE: 'Sign in with Google',
-WIDE_PLUS: 'Sign in with Google+'
-};
-var ThemeValue = {
-LIGHT: 'light',
-DARK: 'dark'
-};
-var WidthValue = {
-ICON_ONLY: 'iconOnly',
-STANDARD: 'standard',
-WIDE: 'wide'
-};
-Polymer({
-is: 'google-signin',
-properties: {
-appPackageName: {
-type: String,
-value: ''
-},
-brand: {
-type: String,
-value: ''
-},
-_brand: {
-type: String,
-computed: '_computeBrand(brand, hasPlusScopes)'
-},
-clientId: {
-type: String,
-value: ''
-},
-cookiePolicy: {
-type: String,
-value: ''
-},
-height: {
-type: String,
-value: 'standard'
-},
-fill: {
-type: Boolean,
-value: true
-},
-labelAdditional: {
-type: String,
-value: 'Additional permissions required'
-},
-labelSignin: {
-type: String,
-value: ''
-},
-_labelSignin: {
-type: String,
-computed: '_computeSigninLabel(labelSignin, width, _brand)'
-},
-labelSignout: {
-type: String,
-value: 'Sign out'
-},
-raised: {
-type: Boolean,
-value: false
-},
-requestVisibleActions: {
-type: String,
-value: ''
-},
-hostedDomain: {
-type: String,
-value: ''
-},
-offline: {
-type: Boolean,
-value: false
-},
-offlineAlwaysPrompt: {
-type: Boolean,
-value: false
-},
-scopes: {
-type: String,
-value: ''
-},
-theme: {
-type: String,
-value: 'dark'
-},
-width: {
-type: String,
-value: 'standard'
-},
-_brandIcon: {
-type: String,
-computed: '_computeIcon(_brand)'
-},
-hasPlusScopes: {
-type: Boolean,
-notify: true,
-value: false
-},
-needAdditionalAuth: {
-type: Boolean,
-value: false
-},
-signedIn: {
-type: Boolean,
-notify: true,
-value: false,
-observer: '_observeSignedIn'
-},
-isAuthorized: {
-type: Boolean,
-notify: true,
-value: false
-}
-},
-_computeButtonClass: function (height, width, theme, signedIn, brand, needAdditionalAuth) {
-return 'height-' + height + ' width-' + width + ' theme-' + theme + ' signedIn-' + signedIn + ' brand-' + brand + '  additionalAuth-' + needAdditionalAuth;
-},
-_computeIcon: function (brand) {
-return 'google:' + brand;
-},
-_computeButtonIsSignIn: function (signedIn, additionalAuth) {
-return !signedIn;
-},
-_computeButtonIsSignOut: function (signedIn, additionalAuth) {
-return signedIn && !additionalAuth;
-},
-_computeButtonIsSignOutAddl: function (signedIn, additionalAuth) {
-return signedIn && additionalAuth;
-},
-_computeBrand: function (attrBrand, hasPlusScopes) {
-var newBrand;
-if (attrBrand) {
-newBrand = attrBrand;
-} else if (hasPlusScopes) {
-newBrand = BrandValue.PLUS;
-} else {
-newBrand = BrandValue.GOOGLE;
-}
-;
-return newBrand;
-},
-_observeSignedIn: function (newVal, oldVal) {
-if (newVal) {
-if (this.needAdditionalAuth)
-this.fire('google-signin-necessary');
-this.fire('google-signin-success');
-} else
-this.fire('google-signed-out');
-},
-_computeSigninLabel: function (labelSignin, width, _brand) {
-if (labelSignin) {
-return labelSignin;
-} else {
-switch (width) {
-case WidthValue.WIDE:
-return _brand == BrandValue.PLUS ? LabelValue.WIDE_PLUS : LabelValue.WIDE;
-case WidthValue.STANDARD:
-return LabelValue.STANDARD;
-case WidthValue.ICON_ONLY:
-return '';
-default:
-console.warn('bad width value: ', width);
-return LabelValue.STANDARD;
-}
-}
-},
-signIn: function () {
-this.$.aware.signIn();
-},
-_signInKeyPress: function (e) {
-if (e.which == 13 || e.keyCode == 13 || e.which == 32 || e.keyCode == 32) {
-e.preventDefault();
-this.signIn();
-}
-},
-signOut: function () {
-this.fire('google-signout-attempted');
-this.$.aware.signOut();
-},
-_signOutKeyPress: function (e) {
-if (e.which == 13 || e.keyCode == 13 || e.which == 32 || e.keyCode == 32) {
-e.preventDefault();
-this.signOut();
-}
-}
-});
-}());
-function MakePromise(asap) {
-function Promise(fn) {
-if (typeof this !== 'object' || typeof fn !== 'function')
-throw new TypeError();
-this._state = null;
-this._value = null;
-this._deferreds = [];
-doResolve(fn, resolve.bind(this), reject.bind(this));
-}
-function handle(deferred) {
-var me = this;
-if (this._state === null) {
-this._deferreds.push(deferred);
-return;
-}
-asap(function () {
-var cb = me._state ? deferred.onFulfilled : deferred.onRejected;
-if (typeof cb !== 'function') {
-(me._state ? deferred.resolve : deferred.reject)(me._value);
-return;
-}
-var ret;
-try {
-ret = cb(me._value);
-} catch (e) {
-deferred.reject(e);
-return;
-}
-deferred.resolve(ret);
-});
-}
-function resolve(newValue) {
-try {
-if (newValue === this)
-throw new TypeError();
-if (newValue && (typeof newValue === 'object' || typeof newValue === 'function')) {
-var then = newValue.then;
-if (typeof then === 'function') {
-doResolve(then.bind(newValue), resolve.bind(this), reject.bind(this));
-return;
-}
-}
-this._state = true;
-this._value = newValue;
-finale.call(this);
-} catch (e) {
-reject.call(this, e);
-}
-}
-function reject(newValue) {
-this._state = false;
-this._value = newValue;
-finale.call(this);
-}
-function finale() {
-for (var i = 0, len = this._deferreds.length; i < len; i++) {
-handle.call(this, this._deferreds[i]);
-}
-this._deferreds = null;
-}
-function doResolve(fn, onFulfilled, onRejected) {
-var done = false;
-try {
-fn(function (value) {
-if (done)
-return;
-done = true;
-onFulfilled(value);
-}, function (reason) {
-if (done)
-return;
-done = true;
-onRejected(reason);
-});
-} catch (ex) {
-if (done)
-return;
-done = true;
-onRejected(ex);
-}
-}
-Promise.prototype['catch'] = function (onRejected) {
-return this.then(null, onRejected);
-};
-Promise.prototype.then = function (onFulfilled, onRejected) {
-var me = this;
-return new Promise(function (resolve, reject) {
-handle.call(me, {
-onFulfilled: onFulfilled,
-onRejected: onRejected,
-resolve: resolve,
-reject: reject
-});
-});
-};
-Promise.resolve = function (value) {
-if (value && typeof value === 'object' && value.constructor === Promise) {
-return value;
-}
-return new Promise(function (resolve) {
-resolve(value);
-});
-};
-Promise.reject = function (value) {
-return new Promise(function (resolve, reject) {
-reject(value);
-});
-};
-return Promise;
-}
-if (typeof module !== 'undefined') {
-module.exports = MakePromise;
-};
-if (!window.Promise) {
-window.Promise = MakePromise(Polymer.Base.async);
-};
-'use strict';
-Polymer({
-is: 'iron-request',
-hostAttributes: { hidden: true },
-properties: {
-xhr: {
-type: Object,
-notify: true,
-readOnly: true,
-value: function () {
-return new XMLHttpRequest();
-}
-},
-response: {
-type: Object,
-notify: true,
-readOnly: true,
-value: function () {
-return null;
-}
-},
-status: {
-type: Number,
-notify: true,
-readOnly: true,
-value: 0
-},
-statusText: {
-type: String,
-notify: true,
-readOnly: true,
-value: ''
-},
-completes: {
-type: Object,
-readOnly: true,
-notify: true,
-value: function () {
-return new Promise(function (resolve, reject) {
-this.resolveCompletes = resolve;
-this.rejectCompletes = reject;
-}.bind(this));
-}
-},
-progress: {
-type: Object,
-notify: true,
-readOnly: true,
-value: function () {
-return {};
-}
-},
-aborted: {
-type: Boolean,
-notify: true,
-readOnly: true,
-value: false
-},
-errored: {
-type: Boolean,
-notify: true,
-readOnly: true,
-value: false
-},
-timedOut: {
-type: Boolean,
-notify: true,
-readOnly: true,
-value: false
-}
-},
-get succeeded() {
-if (this.errored || this.aborted || this.timedOut) {
-return false;
-}
-var status = this.xhr.status || 0;
-return status === 0 || status >= 200 && status < 300;
-},
-send: function (options) {
-var xhr = this.xhr;
-if (xhr.readyState > 0) {
-return null;
-}
-xhr.addEventListener('progress', function (progress) {
-this._setProgress({
-lengthComputable: progress.lengthComputable,
-loaded: progress.loaded,
-total: progress.total
-});
-}.bind(this));
-xhr.addEventListener('error', function (error) {
-this._setErrored(true);
-this._updateStatus();
-this.rejectCompletes(error);
-}.bind(this));
-xhr.addEventListener('timeout', function (error) {
-this._setTimedOut(true);
-this._updateStatus();
-this.rejectCompletes(error);
-}.bind(this));
-xhr.addEventListener('abort', function () {
-this._updateStatus();
-this.rejectCompletes(new Error('Request aborted.'));
-}.bind(this));
-xhr.addEventListener('loadend', function () {
-this._updateStatus();
-if (!this.succeeded) {
-this.rejectCompletes(new Error('The request failed with status code: ' + this.xhr.status));
-return;
-}
-this._setResponse(this.parseResponse());
-this.resolveCompletes(this);
-}.bind(this));
-this.url = options.url;
-xhr.open(options.method || 'GET', options.url, options.async !== false);
-var acceptType = {
-'json': 'application/json',
-'text': 'text/plain',
-'html': 'text/html',
-'xml': 'application/xml',
-'arraybuffer': 'application/octet-stream'
-}[options.handleAs];
-var headers = options.headers || Object.create(null);
-var newHeaders = Object.create(null);
-for (var key in headers) {
-newHeaders[key.toLowerCase()] = headers[key];
-}
-headers = newHeaders;
-if (acceptType && !headers['accept']) {
-headers['accept'] = acceptType;
-}
-Object.keys(headers).forEach(function (requestHeader) {
-if (/[A-Z]/.test(requestHeader)) {
-console.error('Headers must be lower case, got', requestHeader);
-}
-xhr.setRequestHeader(requestHeader, headers[requestHeader]);
-}, this);
-if (options.async !== false) {
-var handleAs = options.handleAs;
-if (!!options.jsonPrefix || !handleAs) {
-handleAs = 'text';
-}
-xhr.responseType = xhr._responseType = handleAs;
-if (!!options.jsonPrefix) {
-xhr._jsonPrefix = options.jsonPrefix;
-}
-}
-xhr.withCredentials = !!options.withCredentials;
-xhr.timeout = options.timeout;
-var body = this._encodeBodyObject(options.body, headers['content-type']);
-xhr.send(body);
-return this.completes;
-},
-parseResponse: function () {
-var xhr = this.xhr;
-var responseType = xhr.responseType || xhr._responseType;
-var preferResponseText = !this.xhr.responseType;
-var prefixLen = xhr._jsonPrefix && xhr._jsonPrefix.length || 0;
-try {
-switch (responseType) {
-case 'json':
-if (preferResponseText || xhr.response === undefined) {
-try {
-return JSON.parse(xhr.responseText);
-} catch (_) {
-return null;
-}
-}
-return xhr.response;
-case 'xml':
-return xhr.responseXML;
-case 'blob':
-case 'document':
-case 'arraybuffer':
-return xhr.response;
-case 'text':
-default: {
-if (prefixLen) {
-try {
-return JSON.parse(xhr.responseText.substring(prefixLen));
-} catch (_) {
-return null;
-}
-}
-return xhr.responseText;
-}
-}
-} catch (e) {
-this.rejectCompletes(new Error('Could not parse response. ' + e.message));
-}
-},
-abort: function () {
-this._setAborted(true);
-this.xhr.abort();
-},
-_encodeBodyObject: function (body, contentType) {
-if (typeof body == 'string') {
-return body;
-}
-var bodyObj = body;
-switch (contentType) {
-case 'application/json':
-return JSON.stringify(bodyObj);
-case 'application/x-www-form-urlencoded':
-return this._wwwFormUrlEncode(bodyObj);
-}
-return body;
-},
-_wwwFormUrlEncode: function (object) {
-if (!object) {
-return '';
-}
-var pieces = [];
-Object.keys(object).forEach(function (key) {
-pieces.push(this._wwwFormUrlEncodePiece(key) + '=' + this._wwwFormUrlEncodePiece(object[key]));
-}, this);
-return pieces.join('&');
-},
-_wwwFormUrlEncodePiece: function (str) {
-return encodeURIComponent(str.toString().replace(/\r?\n/g, '\r\n')).replace(/%20/g, '+');
-},
-_updateStatus: function () {
-this._setStatus(this.xhr.status);
-this._setStatusText(this.xhr.statusText === undefined ? '' : this.xhr.statusText);
-}
-});
-'use strict';
-Polymer({
-is: 'iron-ajax',
-hostAttributes: { hidden: true },
-properties: {
-url: { type: String },
-params: {
-type: Object,
-value: function () {
-return {};
-}
-},
-method: {
-type: String,
-value: 'GET'
-},
-headers: {
-type: Object,
-value: function () {
-return {};
-}
-},
-contentType: {
-type: String,
-value: null
-},
-body: {
-type: Object,
-value: null
-},
-sync: {
-type: Boolean,
-value: false
-},
-handleAs: {
-type: String,
-value: 'json'
-},
-withCredentials: {
-type: Boolean,
-value: false
-},
-timeout: {
-type: Number,
-value: 0
-},
-auto: {
-type: Boolean,
-value: false
-},
-verbose: {
-type: Boolean,
-value: false
-},
-lastRequest: {
-type: Object,
-notify: true,
-readOnly: true
-},
-loading: {
-type: Boolean,
-notify: true,
-readOnly: true
-},
-lastResponse: {
-type: Object,
-notify: true,
-readOnly: true
-},
-lastError: {
-type: Object,
-notify: true,
-readOnly: true
-},
-activeRequests: {
-type: Array,
-notify: true,
-readOnly: true,
-value: function () {
-return [];
-}
-},
-debounceDuration: {
-type: Number,
-value: 0,
-notify: true
-},
-jsonPrefix: {
-type: String,
-value: ''
-},
-_boundHandleResponse: {
-type: Function,
-value: function () {
-return this._handleResponse.bind(this);
-}
-}
-},
-observers: ['_requestOptionsChanged(url, method, params.*, headers, contentType, ' + 'body, sync, handleAs, jsonPrefix, withCredentials, timeout, auto)'],
-get queryString() {
-var queryParts = [];
-var param;
-var value;
-for (param in this.params) {
-value = this.params[param];
-param = window.encodeURIComponent(param);
-if (Array.isArray(value)) {
-for (var i = 0; i < value.length; i++) {
-queryParts.push(param + '=' + window.encodeURIComponent(value[i]));
-}
-} else if (value !== null) {
-queryParts.push(param + '=' + window.encodeURIComponent(value));
-} else {
-queryParts.push(param);
-}
-}
-return queryParts.join('&');
-},
-get requestUrl() {
-var queryString = this.queryString;
-if (queryString) {
-var bindingChar = this.url.indexOf('?') >= 0 ? '&' : '?';
-return this.url + bindingChar + queryString;
-}
-return this.url;
-},
-get requestHeaders() {
-var headers = {};
-var contentType = this.contentType;
-if (contentType == null && typeof this.body === 'string') {
-contentType = 'application/x-www-form-urlencoded';
-}
-if (contentType) {
-headers['content-type'] = contentType;
-}
-var header;
-if (this.headers instanceof Object) {
-for (header in this.headers) {
-headers[header] = this.headers[header].toString();
-}
-}
-return headers;
-},
-toRequestOptions: function () {
-return {
-url: this.requestUrl || '',
-method: this.method,
-headers: this.requestHeaders,
-body: this.body,
-async: !this.sync,
-handleAs: this.handleAs,
-jsonPrefix: this.jsonPrefix,
-withCredentials: this.withCredentials,
-timeout: this.timeout
-};
-},
-generateRequest: function () {
-var request = document.createElement('iron-request');
-var requestOptions = this.toRequestOptions();
-this.activeRequests.push(request);
-request.completes.then(this._boundHandleResponse).catch(this._handleError.bind(this, request)).then(this._discardRequest.bind(this, request));
-request.send(requestOptions);
-this._setLastRequest(request);
-this._setLoading(true);
-this.fire('request', {
-request: request,
-options: requestOptions
-}, { bubbles: false });
-return request;
-},
-_handleResponse: function (request) {
-if (request === this.lastRequest) {
-this._setLastResponse(request.response);
-this._setLastError(null);
-this._setLoading(false);
-}
-this.fire('response', request, { bubbles: false });
-},
-_handleError: function (request, error) {
-if (this.verbose) {
-console.error(error);
-}
-if (request === this.lastRequest) {
-this._setLastError({
-request: request,
-error: error
-});
-this._setLastResponse(null);
-this._setLoading(false);
-}
-this.fire('error', {
-request: request,
-error: error
-}, { bubbles: false });
-},
-_discardRequest: function (request) {
-var requestIndex = this.activeRequests.indexOf(request);
-if (requestIndex > -1) {
-this.activeRequests.splice(requestIndex, 1);
-}
-},
-_requestOptionsChanged: function () {
-this.debounce('generate-request', function () {
-if (this.url == null) {
-return;
-}
-if (this.auto) {
-this.generateRequest();
-}
-}, this.debounceDuration);
-}
-});
-(function () {
-var SCOPE_ = 'https://spreadsheets.google.com/feeds';
-var rowDataCache_ = {};
-function generateCacheKey_() {
-return this._worksheetId + '_' + this.tabId;
-}
-function getLink_(rel, links) {
-for (var i = 0, link; link = links[i]; ++i) {
-if (link.rel === rel) {
-return link;
-}
-}
-return null;
-}
-function wid_to_gid_(wid) {
-return parseInt(String(wid), 36) ^ 31578;
-}
-function gid_to_wid_(gid) {
-return parseInt(gid ^ 31578).toString(36);
-}
-window.GoogleSheets = Polymer({
-is: 'google-sheets',
-hostAttributes: { hidden: true },
-properties: {
-clientId: {
-type: String,
-value: '',
-observer: '_configUpdate'
-},
-key: {
-type: String,
-value: '',
-observer: '_keyChanged'
-},
-tabId: {
-type: Number,
-value: 1,
-observer: '_configUpdate'
-},
-published: {
-type: Boolean,
-value: false,
-observer: '_configUpdate'
-},
-sheet: {
-type: Object,
-value: function () {
-return {};
-},
-readOnly: true,
-notify: true,
-observer: '_sheetChanged'
-},
-tab: {
-type: Object,
-value: function () {
-return {};
-},
-readOnly: true,
-notify: true,
-observer: '_tabChanged'
-},
-rows: {
-type: Array,
-value: function () {
-return [];
-},
-readOnly: true,
-notify: true
-},
-spreadsheets: {
-type: Array,
-readOnly: true,
-notify: true,
-value: function () {
-return [];
-}
-},
-openInGoogleDocsUrl: {
-type: String,
-computed: '_computeGoogleDocsUrl(key)',
-notify: true
-}
-},
-_worksheetId: null,
-_computeGoogleDocsUrl: function (key) {
-var url = 'https://docs.google.com/spreadsheet/';
-if (key) {
-url += 'ccc?key=' + key;
-}
-return url;
-},
-_configUpdate: function (key, published, tabId, clientId) {
-this._tabIdChanged();
-},
-_keyChanged: function (newValue, oldValue) {
-if (this.published) {
-var url = SCOPE_ + '/list/' + this.key + '/' + this.tabId + '/public/values';
-this.$.publicajax.url = url;
-this.$.publicajax.generateRequest();
-}
-},
-_tabIdChanged: function (newValue, oldValue) {
-if (this._worksheetId) {
-this._getCellRows();
-} else if (this.published) {
-this._keyChanged();
-}
-},
-_sheetChanged: function (newValue, oldValue) {
-if (!this.sheet.title) {
-return;
-}
-var authors = this.sheet.author && this.sheet.author.map(function (a) {
-return {
-email: a.email.$t,
-name: a.name.$t
-};
-});
-this.set('sheet.title', this.sheet.title.$t);
-this.set('sheet.updated', new Date(this.sheet.updated.$t));
-this.set('sheet.authors', authors);
-this._worksheetId = this.sheet.id.$t.split('/').slice(-1)[0];
-this._getWorksheet();
-},
-_tabChanged: function (newValue, oldValue) {
-if (!this.tab.title) {
-return;
-}
-var authors = this.tab.authors = this.tab.author && this.tab.author.map(function (a) {
-return {
-email: a.email.$t,
-name: a.name.$t
-};
-});
-this.set('tab.title', this.tab.title.$t);
-this.set('tab.updated', new Date(this.tab.updated.$t));
-this.set('tab.authors', authors);
-this.fire('google-sheet-data', {
-type: 'tab',
-data: this.tab
-});
-},
-_onSignInSuccess: function (e, detail) {
-var oauthToken = gapi.auth2.getAuthInstance().currentUser.get().getAuthResponse();
-var headers = { 'Authorization': 'Bearer ' + oauthToken.access_token };
-this.$.listsheetsajax.headers = headers;
-this.$.worksheetajax.headers = headers;
-this.$.cellrowsajax.headers = headers;
-this._listSpreadsheets();
-},
-_onSignInFail: function (e, detail) {
-console.log(e, e.type);
-},
-_listSpreadsheets: function () {
-var url = SCOPE_ + '/spreadsheets/private/full';
-this.$.listsheetsajax.url = url;
-this.$.listsheetsajax.generateRequest();
-},
-_onSpreadsheetList: function (e) {
-e.stopPropagation();
-var feed = e.target.lastResponse.feed;
-this._setSpreadsheets(feed.entry);
-this.fire('google-sheet-data', {
-type: 'spreadsheets',
-data: this.spreadsheets
-});
-if (this.key) {
-for (var i = 0, entry; entry = feed.entry[i]; ++i) {
-var altLink = getLink_('alternate', entry.link);
-if (altLink && altLink.href.indexOf(this.key) != -1) {
-this._setSheet(entry);
-break;
-}
-}
-}
-},
-_getWorksheet: function () {
-if (!this._worksheetId) {
-throw new Error('workesheetId was not given.');
-}
-var url = SCOPE_ + '/worksheets/' + this._worksheetId + '/private/full/' + this.tabId;
-this.$.worksheetajax.url = url;
-this.$.worksheetajax.generateRequest();
-},
-_onWorksheet: function (e) {
-e.stopPropagation();
-this._setTab(e.target.lastResponse.entry);
-this._getCellRows();
-},
-_getCellRows: function () {
-var key = generateCacheKey_.call(this);
-if (key in rowDataCache_) {
-this._onCellRows(null, null, rowDataCache_[key]);
-return;
-}
-var url = SCOPE_ + '/list/' + this._worksheetId + '/' + this.tabId + '/private/full';
-this.$.cellrowsajax.url = url;
-this.$.cellrowsajax.generateRequest();
-},
-_onCellRows: function (e) {
-e.stopPropagation();
-var feed = e.target.lastResponse.feed;
-var key = generateCacheKey_.call(this);
-if (!(key in rowDataCache_)) {
-rowDataCache_[key] = { response: { feed: feed } };
-}
-this._setRows(feed.entry);
-var authors = feed.author && feed.author.map(function (a) {
-return {
-email: a.email.$t,
-name: a.name.$t
-};
-});
-this.set('rows.authors', authors);
-if (this.published) {
-this._setTab(feed);
-}
-this.fire('google-sheet-data', {
-type: 'rows',
-data: this.rows
-});
-}
-});
-}());
 Polymer.IronResizableBehavior = {
 properties: {
 _parentResizable: {
@@ -12609,524 +10142,6 @@ this.notifyResize();
 },
 _calcSize: function () {
 return this.getBoundingClientRect()[this.dimension] + 'px';
-}
-});
-Polymer.IronControlState = {
-properties: {
-focused: {
-type: Boolean,
-value: false,
-notify: true,
-readOnly: true,
-reflectToAttribute: true
-},
-disabled: {
-type: Boolean,
-value: false,
-notify: true,
-observer: '_disabledChanged',
-reflectToAttribute: true
-},
-_oldTabIndex: { type: Number },
-_boundFocusBlurHandler: {
-type: Function,
-value: function () {
-return this._focusBlurHandler.bind(this);
-}
-}
-},
-observers: ['_changedControlState(focused, disabled)'],
-ready: function () {
-this.addEventListener('focus', this._boundFocusBlurHandler, true);
-this.addEventListener('blur', this._boundFocusBlurHandler, true);
-},
-_focusBlurHandler: function (event) {
-if (event.target === this) {
-this._setFocused(event.type === 'focus');
-} else if (!this.shadowRoot && !this.isLightDescendant(event.target)) {
-this.fire(event.type, { sourceEvent: event }, {
-node: this,
-bubbles: event.bubbles,
-cancelable: event.cancelable
-});
-}
-},
-_disabledChanged: function (disabled, old) {
-this.setAttribute('aria-disabled', disabled ? 'true' : 'false');
-this.style.pointerEvents = disabled ? 'none' : '';
-if (disabled) {
-this._oldTabIndex = this.tabIndex;
-this.focused = false;
-this.tabIndex = -1;
-} else if (this._oldTabIndex !== undefined) {
-this.tabIndex = this._oldTabIndex;
-}
-},
-_changedControlState: function () {
-if (this._controlStateChanged) {
-this._controlStateChanged();
-}
-}
-};
-Polymer.IronButtonStateImpl = {
-properties: {
-pressed: {
-type: Boolean,
-readOnly: true,
-value: false,
-reflectToAttribute: true,
-observer: '_pressedChanged'
-},
-toggles: {
-type: Boolean,
-value: false,
-reflectToAttribute: true
-},
-active: {
-type: Boolean,
-value: false,
-notify: true,
-reflectToAttribute: true
-},
-pointerDown: {
-type: Boolean,
-readOnly: true,
-value: false
-},
-receivedFocusFromKeyboard: {
-type: Boolean,
-readOnly: true
-},
-ariaActiveAttribute: {
-type: String,
-value: 'aria-pressed',
-observer: '_ariaActiveAttributeChanged'
-}
-},
-listeners: {
-down: '_downHandler',
-up: '_upHandler',
-tap: '_tapHandler'
-},
-observers: [
-'_detectKeyboardFocus(focused)',
-'_activeChanged(active, ariaActiveAttribute)'
-],
-keyBindings: {
-'enter:keydown': '_asyncClick',
-'space:keydown': '_spaceKeyDownHandler',
-'space:keyup': '_spaceKeyUpHandler'
-},
-_mouseEventRe: /^mouse/,
-_tapHandler: function () {
-if (this.toggles) {
-this._userActivate(!this.active);
-} else {
-this.active = false;
-}
-},
-_detectKeyboardFocus: function (focused) {
-this._setReceivedFocusFromKeyboard(!this.pointerDown && focused);
-},
-_userActivate: function (active) {
-if (this.active !== active) {
-this.active = active;
-this.fire('change');
-}
-},
-_downHandler: function (event) {
-this._setPointerDown(true);
-this._setPressed(true);
-this._setReceivedFocusFromKeyboard(false);
-},
-_upHandler: function () {
-this._setPointerDown(false);
-this._setPressed(false);
-},
-_spaceKeyDownHandler: function (event) {
-var keyboardEvent = event.detail.keyboardEvent;
-var target = Polymer.dom(keyboardEvent).localTarget;
-if (this.isLightDescendant(target))
-return;
-keyboardEvent.preventDefault();
-keyboardEvent.stopImmediatePropagation();
-this._setPressed(true);
-},
-_spaceKeyUpHandler: function (event) {
-var keyboardEvent = event.detail.keyboardEvent;
-var target = Polymer.dom(keyboardEvent).localTarget;
-if (this.isLightDescendant(target))
-return;
-if (this.pressed) {
-this._asyncClick();
-}
-this._setPressed(false);
-},
-_asyncClick: function () {
-this.async(function () {
-this.click();
-}, 1);
-},
-_pressedChanged: function (pressed) {
-this._changedButtonState();
-},
-_ariaActiveAttributeChanged: function (value, oldValue) {
-if (oldValue && oldValue != value && this.hasAttribute(oldValue)) {
-this.removeAttribute(oldValue);
-}
-},
-_activeChanged: function (active, ariaActiveAttribute) {
-if (this.toggles) {
-this.setAttribute(this.ariaActiveAttribute, active ? 'true' : 'false');
-} else {
-this.removeAttribute(this.ariaActiveAttribute);
-}
-this._changedButtonState();
-},
-_controlStateChanged: function () {
-if (this.disabled) {
-this._setPressed(false);
-} else {
-this._changedButtonState();
-}
-},
-_changedButtonState: function () {
-if (this._buttonStateChanged) {
-this._buttonStateChanged();
-}
-}
-};
-Polymer.IronButtonState = [
-Polymer.IronA11yKeysBehavior,
-Polymer.IronButtonStateImpl
-];
-Polymer.PaperRippleBehavior = {
-properties: {
-noink: {
-type: Boolean,
-observer: '_noinkChanged'
-},
-_rippleContainer: { type: Object }
-},
-_buttonStateChanged: function () {
-if (this.focused) {
-this.ensureRipple();
-}
-},
-_downHandler: function (event) {
-Polymer.IronButtonStateImpl._downHandler.call(this, event);
-if (this.pressed) {
-this.ensureRipple(event);
-}
-},
-ensureRipple: function (optTriggeringEvent) {
-if (!this.hasRipple()) {
-this._ripple = this._createRipple();
-this._ripple.noink = this.noink;
-var rippleContainer = this._rippleContainer || this.root;
-if (rippleContainer) {
-Polymer.dom(rippleContainer).appendChild(this._ripple);
-}
-if (optTriggeringEvent) {
-var domContainer = Polymer.dom(this._rippleContainer || this);
-var target = Polymer.dom(optTriggeringEvent).rootTarget;
-if (domContainer.deepContains(target)) {
-this._ripple.uiDownAction(optTriggeringEvent);
-}
-}
-}
-},
-getRipple: function () {
-this.ensureRipple();
-return this._ripple;
-},
-hasRipple: function () {
-return Boolean(this._ripple);
-},
-_createRipple: function () {
-return document.createElement('paper-ripple');
-},
-_noinkChanged: function (noink) {
-if (this.hasRipple()) {
-this._ripple.noink = noink;
-}
-}
-};
-Polymer.PaperButtonBehaviorImpl = {
-properties: {
-elevation: {
-type: Number,
-reflectToAttribute: true,
-readOnly: true
-}
-},
-observers: [
-'_calculateElevation(focused, disabled, active, pressed, receivedFocusFromKeyboard)',
-'_computeKeyboardClass(receivedFocusFromKeyboard)'
-],
-hostAttributes: {
-role: 'button',
-tabindex: '0',
-animated: true
-},
-_calculateElevation: function () {
-var e = 1;
-if (this.disabled) {
-e = 0;
-} else if (this.active || this.pressed) {
-e = 4;
-} else if (this.receivedFocusFromKeyboard) {
-e = 3;
-}
-this._setElevation(e);
-},
-_computeKeyboardClass: function (receivedFocusFromKeyboard) {
-this.toggleClass('keyboard-focus', receivedFocusFromKeyboard);
-},
-_spaceKeyDownHandler: function (event) {
-Polymer.IronButtonStateImpl._spaceKeyDownHandler.call(this, event);
-if (this.hasRipple() && this.getRipple().ripples.length < 1) {
-this._ripple.uiDownAction();
-}
-},
-_spaceKeyUpHandler: function (event) {
-Polymer.IronButtonStateImpl._spaceKeyUpHandler.call(this, event);
-if (this.hasRipple()) {
-this._ripple.uiUpAction();
-}
-}
-};
-Polymer.PaperButtonBehavior = [
-Polymer.IronButtonState,
-Polymer.IronControlState,
-Polymer.PaperRippleBehavior,
-Polymer.PaperButtonBehaviorImpl
-];
-Polymer({
-is: 'paper-button',
-behaviors: [Polymer.PaperButtonBehavior],
-properties: {
-raised: {
-type: Boolean,
-reflectToAttribute: true,
-value: false,
-observer: '_calculateElevation'
-}
-},
-_calculateElevation: function () {
-if (!this.raised) {
-this._setElevation(0);
-} else {
-Polymer.PaperButtonBehaviorImpl._calculateElevation.apply(this);
-}
-}
-});
-Polymer.IronValidatableBehavior = {
-properties: {
-validatorType: {
-type: String,
-value: 'validator'
-},
-validator: { type: String },
-invalid: {
-notify: true,
-reflectToAttribute: true,
-type: Boolean,
-value: false
-},
-_validatorMeta: { type: Object }
-},
-observers: ['_invalidChanged(invalid)'],
-get _validator() {
-return this._validatorMeta && this._validatorMeta.byKey(this.validator);
-},
-ready: function () {
-this._validatorMeta = new Polymer.IronMeta({ type: this.validatorType });
-},
-_invalidChanged: function () {
-if (this.invalid) {
-this.setAttribute('aria-invalid', 'true');
-} else {
-this.removeAttribute('aria-invalid');
-}
-},
-hasValidator: function () {
-return this._validator != null;
-},
-validate: function (value) {
-this.invalid = !this._getValidity(value);
-return !this.invalid;
-},
-_getValidity: function (value) {
-if (this.hasValidator()) {
-return this._validator.validate(value);
-}
-return true;
-}
-};
-Polymer.IronFormElementBehavior = {
-properties: {
-name: { type: String },
-value: {
-notify: true,
-type: String
-},
-required: {
-type: Boolean,
-value: false
-},
-_parentForm: { type: Object }
-},
-attached: function () {
-this.fire('iron-form-element-register');
-},
-detached: function () {
-if (this._parentForm) {
-this._parentForm.fire('iron-form-element-unregister', { target: this });
-}
-}
-};
-Polymer.IronCheckedElementBehaviorImpl = {
-properties: {
-checked: {
-type: Boolean,
-value: false,
-reflectToAttribute: true,
-notify: true,
-observer: '_checkedChanged'
-},
-toggles: {
-type: Boolean,
-value: true,
-reflectToAttribute: true
-},
-value: {
-type: String,
-value: 'on',
-observer: '_valueChanged'
-}
-},
-observers: ['_requiredChanged(required)'],
-created: function () {
-this._hasIronCheckedElementBehavior = true;
-},
-_getValidity: function (_value) {
-return this.disabled || !this.required || this.checked;
-},
-_requiredChanged: function () {
-if (this.required) {
-this.setAttribute('aria-required', 'true');
-} else {
-this.removeAttribute('aria-required');
-}
-},
-_checkedChanged: function () {
-this.active = this.checked;
-this.fire('iron-change');
-},
-_valueChanged: function () {
-if (this.value === undefined || this.value === null) {
-this.value = 'on';
-}
-}
-};
-Polymer.IronCheckedElementBehavior = [
-Polymer.IronFormElementBehavior,
-Polymer.IronValidatableBehavior,
-Polymer.IronCheckedElementBehaviorImpl
-];
-Polymer.PaperInkyFocusBehaviorImpl = {
-observers: ['_focusedChanged(receivedFocusFromKeyboard)'],
-_focusedChanged: function (receivedFocusFromKeyboard) {
-if (receivedFocusFromKeyboard) {
-this.ensureRipple();
-}
-if (this.hasRipple()) {
-this._ripple.holdDown = receivedFocusFromKeyboard;
-}
-},
-_createRipple: function () {
-var ripple = Polymer.PaperRippleBehavior._createRipple();
-ripple.id = 'ink';
-ripple.setAttribute('center', '');
-ripple.classList.add('circle');
-return ripple;
-}
-};
-Polymer.PaperInkyFocusBehavior = [
-Polymer.IronButtonState,
-Polymer.IronControlState,
-Polymer.PaperRippleBehavior,
-Polymer.PaperInkyFocusBehaviorImpl
-];
-Polymer.PaperCheckedElementBehaviorImpl = {
-_checkedChanged: function () {
-Polymer.IronCheckedElementBehaviorImpl._checkedChanged.call(this);
-if (this.hasRipple()) {
-if (this.checked) {
-this._ripple.setAttribute('checked', '');
-} else {
-this._ripple.removeAttribute('checked');
-}
-}
-},
-_buttonStateChanged: function () {
-Polymer.PaperRippleBehavior._buttonStateChanged.call(this);
-if (this.disabled) {
-return;
-}
-if (this.isAttached) {
-this.checked = this.active;
-}
-}
-};
-Polymer.PaperCheckedElementBehavior = [
-Polymer.PaperInkyFocusBehavior,
-Polymer.IronCheckedElementBehavior,
-Polymer.PaperCheckedElementBehaviorImpl
-];
-Polymer({
-is: 'paper-toggle-button',
-behaviors: [Polymer.PaperCheckedElementBehavior],
-hostAttributes: {
-role: 'button',
-'aria-pressed': 'false',
-tabindex: 0
-},
-properties: {},
-listeners: { track: '_ontrack' },
-_ontrack: function (event) {
-var track = event.detail;
-if (track.state === 'start') {
-this._trackStart(track);
-} else if (track.state === 'track') {
-this._trackMove(track);
-} else if (track.state === 'end') {
-this._trackEnd(track);
-}
-},
-_trackStart: function (track) {
-this._width = this.$.toggleBar.offsetWidth / 2;
-this._trackChecked = this.checked;
-this.$.toggleButton.classList.add('dragging');
-},
-_trackMove: function (track) {
-var dx = track.dx;
-this._x = Math.min(this._width, Math.max(0, this._trackChecked ? this._width + dx : dx));
-this.translate3d(this._x + 'px', 0, 0, this.$.toggleButton);
-this._userActivate(this._x > this._width / 2);
-},
-_trackEnd: function (track) {
-this.$.toggleButton.classList.remove('dragging');
-this.transform('', this.$.toggleButton);
-},
-_createRipple: function () {
-this._rippleContainer = this.$.toggleButton;
-var ripple = Polymer.PaperRippleBehavior._createRipple();
-ripple.id = 'ink';
-ripple.setAttribute('recenters', '');
-ripple.classList.add('circle', 'toggle-ink');
-return ripple;
 }
 });
 (function () {
@@ -19785,6 +16800,3086 @@ this.fire('error', error);
 }.bind(this));
 }
 });
+(function () {
+'use strict';
+Polymer.IronJsonpLibraryBehavior = {
+properties: {
+libraryLoaded: {
+type: Boolean,
+value: false,
+notify: true,
+readOnly: true
+},
+libraryErrorMessage: {
+type: String,
+value: null,
+notify: true,
+readOnly: true
+}
+},
+observers: ['_libraryUrlChanged(libraryUrl)'],
+_libraryUrlChanged: function (libraryUrl) {
+if (this._isReady && this.libraryUrl)
+this._loadLibrary();
+},
+_libraryLoadCallback: function (err, result) {
+if (err) {
+console.warn('Library load failed:', err.message);
+this._setLibraryErrorMessage(err.message);
+} else {
+this._setLibraryErrorMessage(null);
+this._setLibraryLoaded(true);
+if (this.notifyEvent)
+this.fire(this.notifyEvent, result);
+}
+},
+_loadLibrary: function () {
+LoaderMap.require(this.libraryUrl, this._libraryLoadCallback.bind(this), this.callbackName);
+},
+ready: function () {
+this._isReady = true;
+if (this.libraryUrl)
+this._loadLibrary();
+}
+};
+var LoaderMap = {
+apiMap: {},
+require: function (url, notifyCallback, jsonpCallbackName) {
+var name = this.nameFromUrl(url);
+if (!this.apiMap[name])
+this.apiMap[name] = new Loader(name, url, jsonpCallbackName);
+this.apiMap[name].requestNotify(notifyCallback);
+},
+nameFromUrl: function (url) {
+return url.replace(/[\:\/\%\?\&\.\=\-\,]/g, '_') + '_api';
+}
+};
+var Loader = function (name, url, callbackName) {
+this.notifiers = [];
+if (!callbackName) {
+if (url.indexOf(this.callbackMacro) >= 0) {
+callbackName = name + '_loaded';
+url = url.replace(this.callbackMacro, callbackName);
+} else {
+this.error = new Error('IronJsonpLibraryBehavior a %%callback%% parameter is required in libraryUrl');
+return;
+}
+}
+this.callbackName = callbackName;
+window[this.callbackName] = this.success.bind(this);
+this.addScript(url);
+};
+Loader.prototype = {
+callbackMacro: '%%callback%%',
+loaded: false,
+addScript: function (src) {
+var script = document.createElement('script');
+script.src = src;
+script.onerror = this.handleError.bind(this);
+var s = document.querySelector('script') || document.body;
+s.parentNode.insertBefore(script, s);
+this.script = script;
+},
+removeScript: function () {
+if (this.script.parentNode) {
+this.script.parentNode.removeChild(this.script);
+}
+this.script = null;
+},
+handleError: function (ev) {
+this.error = new Error('Library failed to load');
+this.notifyAll();
+this.cleanup();
+},
+success: function () {
+this.loaded = true;
+this.result = Array.prototype.slice.call(arguments);
+this.notifyAll();
+this.cleanup();
+},
+cleanup: function () {
+delete window[this.callbackName];
+},
+notifyAll: function () {
+this.notifiers.forEach(function (notifyCallback) {
+notifyCallback(this.error, this.result);
+}.bind(this));
+this.notifiers = [];
+},
+requestNotify: function (notifyCallback) {
+if (this.loaded || this.error) {
+notifyCallback(this.error, this.result);
+} else {
+this.notifiers.push(notifyCallback);
+}
+}
+};
+}());
+Polymer({
+is: 'iron-jsonp-library',
+behaviors: [Polymer.IronJsonpLibraryBehavior],
+properties: {
+libraryUrl: String,
+callbackName: String,
+notifyEvent: String
+}
+});
+Polymer({
+is: 'google-js-api',
+behaviors: [Polymer.IronJsonpLibraryBehavior],
+properties: {
+libraryUrl: {
+type: String,
+value: 'https://apis.google.com/js/api.js?onload=%%callback%%'
+},
+notifyEvent: {
+type: String,
+value: 'js-api-load'
+}
+},
+get api() {
+return gapi;
+}
+});
+(function () {
+var ProxyLoginAttributes = {
+'appPackageName': 'apppackagename',
+'clientId': 'clientid',
+'cookiePolicy': 'cookiepolicy',
+'requestVisibleActions': 'requestvisibleactions',
+'hostedDomain': 'hostedDomain'
+};
+var AuthEngine = {
+_clientId: null,
+get clientId() {
+return this._clientId;
+},
+set clientId(val) {
+if (this._clientId && val && val != this._clientId) {
+throw new Error('clientId cannot change. Values do not match. New: ' + val + ' Old:' + this._clientId);
+}
+if (val) {
+this._clientId = val;
+this.initAuth2();
+}
+},
+_cookiePolicy: 'single_host_origin',
+get cookiePolicy() {
+return this._cookiePolicy;
+},
+set cookiePolicy(val) {
+if (val) {
+this._cookiePolicy = val;
+}
+},
+_appPackageName: '',
+get appPackageName() {
+return this._appPackageName;
+},
+set appPackageName(val) {
+if (this._appPackageName && val && val != this._appPackageName) {
+throw new Error('appPackageName cannot change. Values do not match. New: ' + val + ' Old: ' + this._appPackageName);
+}
+if (val) {
+this._appPackageName = val;
+}
+},
+_requestVisibleActions: '',
+get requestVisibleactions() {
+return this._requestVisibleActions;
+},
+set requestVisibleactions(val) {
+if (this._requestVisibleActions && val && val != this._requestVisibleActions) {
+throw new Error('requestVisibleactions cannot change. Values do not match. New: ' + val + ' Old: ' + this._requestVisibleActions);
+}
+if (val)
+this._requestVisibleActions = val;
+},
+_hostedDomain: '',
+get hostedDomain() {
+return this._hostedDomain;
+},
+set hostedDomain(val) {
+if (this._hostedDomain && val && val != this._hostedDomain) {
+throw new Error('hostedDomain cannot change. Values do not match. New: ' + val + ' Old: ' + this._hostedDomain);
+}
+if (val)
+this._hostedDomain = val;
+},
+_offline: false,
+get offline() {
+return this._offline;
+},
+set offline(val) {
+this._offline = val;
+this.updateAdditionalAuth();
+},
+_offlineAlwaysPrompt: false,
+get offlineAlwaysPrompt() {
+return this._offlineAlwaysPrompt;
+},
+set offlineAlwaysPrompt(val) {
+this._offlineAlwaysPrompt = val;
+this.updateAdditionalAuth();
+},
+offlineGranted: false,
+_apiLoader: null,
+_requestedScopeArray: [],
+get requestedScopes() {
+return this._requestedScopeArray.join(' ');
+},
+_signedIn: false,
+_grantedScopeArray: [],
+_needAdditionalAuth: true,
+_hasPlusScopes: false,
+signinAwares: [],
+init: function () {
+this._apiLoader = document.createElement('google-js-api');
+this._apiLoader.addEventListener('js-api-load', this.loadAuth2.bind(this));
+},
+loadAuth2: function () {
+gapi.load('auth2', this.initAuth2.bind(this));
+},
+initAuth2: function () {
+if (!('gapi' in window) || !('auth2' in window.gapi) || !this.clientId) {
+return;
+}
+var auth = gapi.auth2.init({
+'client_id': this.clientId,
+'cookie_policy': this.cookiePolicy,
+'scope': this.requestedScopes,
+'hosted_domain': this.hostedDomain
+});
+auth.currentUser.listen(this.handleUserUpdate.bind(this));
+auth.then(function success() {
+}, function error(error) {
+console.error(error);
+});
+},
+handleUserUpdate: function (newPrimaryUser) {
+var isSignedIn = newPrimaryUser.isSignedIn();
+if (isSignedIn != this._signedIn) {
+this._signedIn = isSignedIn;
+for (var i = 0; i < this.signinAwares.length; i++) {
+this.signinAwares[i]._setSignedIn(isSignedIn);
+}
+}
+this._grantedScopeArray = this.strToScopeArray(newPrimaryUser.getGrantedScopes());
+this.updateAdditionalAuth();
+var response = newPrimaryUser.getAuthResponse();
+for (var i = 0; i < this.signinAwares.length; i++) {
+this.signinAwares[i]._updateScopeStatus(response);
+}
+},
+setOfflineCode: function (code) {
+for (var i = 0; i < this.signinAwares.length; i++) {
+this.signinAwares[i]._updateOfflineCode(code);
+}
+},
+strToScopeArray: function (str) {
+if (!str) {
+return [];
+}
+var scopes = str.replace(/\ +/g, ' ').trim().split(' ');
+for (var i = 0; i < scopes.length; i++) {
+scopes[i] = scopes[i].toLowerCase();
+if (scopes[i] === 'https://www.googleapis.com/auth/userinfo.profile') {
+scopes[i] = 'profile';
+}
+if (scopes[i] === 'https://www.googleapis.com/auth/userinfo.email') {
+scopes[i] = 'email';
+}
+}
+return scopes.filter(function (value, index, self) {
+return self.indexOf(value) === index;
+});
+},
+isPlusScope: function (scope) {
+return scope.indexOf('/auth/games') > -1 || scope.indexOf('auth/plus.') > -1 && scope.indexOf('auth/plus.me') < 0;
+},
+hasGrantedScopes: function (scopeStr) {
+var scopes = this.strToScopeArray(scopeStr);
+for (var i = 0; i < scopes.length; i++) {
+if (this._grantedScopeArray.indexOf(scopes[i]) === -1)
+return false;
+}
+return true;
+},
+requestScopes: function (newScopeStr) {
+var newScopes = this.strToScopeArray(newScopeStr);
+var scopesUpdated = false;
+for (var i = 0; i < newScopes.length; i++) {
+if (this._requestedScopeArray.indexOf(newScopes[i]) === -1) {
+this._requestedScopeArray.push(newScopes[i]);
+scopesUpdated = true;
+}
+}
+if (scopesUpdated) {
+this.updateAdditionalAuth();
+this.updatePlusScopes();
+}
+},
+updateAdditionalAuth: function () {
+var needMoreAuth = false;
+if ((this.offlineAlwaysPrompt || this.offline) && !this.offlineGranted) {
+needMoreAuth = true;
+} else {
+for (var i = 0; i < this._requestedScopeArray.length; i++) {
+if (this._grantedScopeArray.indexOf(this._requestedScopeArray[i]) === -1) {
+needMoreAuth = true;
+break;
+}
+}
+}
+if (this._needAdditionalAuth != needMoreAuth) {
+this._needAdditionalAuth = needMoreAuth;
+for (var i = 0; i < this.signinAwares.length; i++) {
+this.signinAwares[i]._setNeedAdditionalAuth(needMoreAuth);
+}
+}
+},
+updatePlusScopes: function () {
+var hasPlusScopes = false;
+for (var i = 0; i < this._requestedScopeArray.length; i++) {
+if (this.isPlusScope(this._requestedScopeArray[i])) {
+hasPlusScopes = true;
+break;
+}
+}
+if (this._hasPlusScopes != hasPlusScopes) {
+this._hasPlusScopes = hasPlusScopes;
+for (var i = 0; i < this.signinAwares.length; i++) {
+this.signinAwares[i]._setHasPlusScopes(hasPlusScopes);
+}
+}
+},
+attachSigninAware: function (aware) {
+if (this.signinAwares.indexOf(aware) == -1) {
+this.signinAwares.push(aware);
+aware._setNeedAdditionalAuth(this._needAdditionalAuth);
+aware._setSignedIn(this._signedIn);
+aware._setHasPlusScopes(this._hasPlusScopes);
+} else {
+console.warn('signinAware attached more than once', aware);
+}
+},
+detachSigninAware: function (aware) {
+var index = this.signinAwares.indexOf(aware);
+if (index != -1) {
+this.signinAwares.splice(index, 1);
+} else {
+console.warn('Trying to detach unattached signin-aware');
+}
+},
+getMissingScopes: function () {
+return this._requestedScopeArray.filter(function (scope) {
+return this._grantedScopeArray.indexOf(scope) === -1;
+}.bind(this)).join(' ');
+},
+assertAuthInitialized: function () {
+if (!this.clientId) {
+throw new Error('AuthEngine not initialized. clientId has not been configured.');
+}
+if (!('gapi' in window)) {
+throw new Error('AuthEngine not initialized. gapi has not loaded.');
+}
+if (!('auth2' in window.gapi)) {
+throw new Error('AuthEngine not initialized. auth2 not loaded.');
+}
+},
+signIn: function () {
+this.assertAuthInitialized();
+var params = { 'scope': this.getMissingScopes() };
+Object.keys(ProxyLoginAttributes).forEach(function (key) {
+if (this[key] && this[key] !== '') {
+params[ProxyLoginAttributes[key]] = this[key];
+}
+}, this);
+var promise;
+var user = gapi.auth2.getAuthInstance().currentUser.get();
+if (!(this.offline || this.offlineAlwaysPrompt)) {
+if (user.getGrantedScopes()) {
+promise = user.grant(params);
+} else {
+promise = gapi.auth2.getAuthInstance().signIn(params);
+}
+} else {
+params.redirect_uri = 'postmessage';
+if (this.offlineAlwaysPrompt) {
+params.approval_prompt = 'force';
+}
+promise = gapi.auth2.getAuthInstance().grantOfflineAccess(params);
+}
+promise.then(function success(response) {
+var newUser;
+if (response.code) {
+AuthEngine.offlineGranted = true;
+newUser = gapi.auth2.getAuthInstance().currentUser.get();
+AuthEngine.setOfflineCode(response.code);
+} else {
+newUser = response;
+}
+var authResponse = newUser.getAuthResponse();
+}, function error(error) {
+if ('Access denied.' == error.reason) {
+return;
+} else {
+console.error(error);
+}
+});
+},
+signOut: function () {
+this.assertAuthInitialized();
+gapi.auth2.getAuthInstance().signOut().then(function success() {
+}, function error(error) {
+console.error(error);
+});
+}
+};
+AuthEngine.init();
+Polymer({
+is: 'google-signin-aware',
+properties: {
+appPackageName: {
+type: String,
+observer: '_appPackageNameChanged'
+},
+clientId: {
+type: String,
+observer: '_clientIdChanged'
+},
+cookiePolicy: {
+type: String,
+observer: '_cookiePolicyChanged'
+},
+requestVisibleActions: {
+type: String,
+observer: '_requestVisibleActionsChanged'
+},
+hostedDomain: {
+type: String,
+observer: '_hostedDomainChanged'
+},
+offline: {
+type: Boolean,
+value: false,
+observer: '_offlineChanged'
+},
+offlineAlwaysPrompt: {
+type: Boolean,
+value: false,
+observer: '_offlineAlwaysPromptChanged'
+},
+scopes: {
+type: String,
+value: 'profile',
+observer: '_scopesChanged'
+},
+signedIn: {
+type: Boolean,
+notify: true,
+readOnly: true
+},
+isAuthorized: {
+type: Boolean,
+notify: true,
+readOnly: true,
+value: false
+},
+needAdditionalAuth: {
+type: Boolean,
+notify: true,
+readOnly: true
+},
+hasPlusScopes: {
+type: Boolean,
+value: false,
+notify: true,
+readOnly: true
+}
+},
+attached: function () {
+AuthEngine.attachSigninAware(this);
+},
+detached: function () {
+AuthEngine.detachSigninAware(this);
+},
+signIn: function () {
+AuthEngine.signIn();
+},
+signOut: function () {
+AuthEngine.signOut();
+},
+_appPackageNameChanged: function (newName, oldName) {
+AuthEngine.appPackageName = newName;
+},
+_clientIdChanged: function (newId, oldId) {
+AuthEngine.clientId = newId;
+},
+_cookiePolicyChanged: function (newPolicy, oldPolicy) {
+AuthEngine.cookiePolicy = newPolicy;
+},
+_requestVisibleActionsChanged: function (newVal, oldVal) {
+AuthEngine.requestVisibleActions = newVal;
+},
+_hostedDomainChanged: function (newVal, oldVal) {
+AuthEngine.hostedDomain = newVal;
+},
+_offlineChanged: function (newVal, oldVal) {
+AuthEngine.offline = newVal;
+},
+_offlineAlwaysPromptChanged: function (newVal, oldVal) {
+AuthEngine.offlineAlwaysPrompt = newVal;
+},
+_scopesChanged: function (newVal, oldVal) {
+AuthEngine.requestScopes(newVal);
+this._updateScopeStatus();
+},
+_updateScopeStatus: function (user) {
+var newAuthorized = this.signedIn && AuthEngine.hasGrantedScopes(this.scopes);
+if (newAuthorized !== this.isAuthorized) {
+this._setIsAuthorized(newAuthorized);
+if (newAuthorized) {
+this.fire('google-signin-aware-success', user);
+} else {
+this.fire('google-signin-aware-signed-out', user);
+}
+}
+},
+_updateOfflineCode: function (code) {
+if (code) {
+this.fire('google-signin-offline-success', { code: code });
+}
+}
+});
+}());
+(function () {
+var metaDatas = {};
+var metaArrays = {};
+var singleton = null;
+Polymer.IronMeta = Polymer({
+is: 'iron-meta',
+properties: {
+type: {
+type: String,
+value: 'default',
+observer: '_typeChanged'
+},
+key: {
+type: String,
+observer: '_keyChanged'
+},
+value: {
+type: Object,
+notify: true,
+observer: '_valueChanged'
+},
+self: {
+type: Boolean,
+observer: '_selfChanged'
+},
+list: {
+type: Array,
+notify: true
+}
+},
+hostAttributes: { hidden: true },
+factoryImpl: function (config) {
+if (config) {
+for (var n in config) {
+switch (n) {
+case 'type':
+case 'key':
+case 'value':
+this[n] = config[n];
+break;
+}
+}
+}
+},
+created: function () {
+this._metaDatas = metaDatas;
+this._metaArrays = metaArrays;
+},
+_keyChanged: function (key, old) {
+this._resetRegistration(old);
+},
+_valueChanged: function (value) {
+this._resetRegistration(this.key);
+},
+_selfChanged: function (self) {
+if (self) {
+this.value = this;
+}
+},
+_typeChanged: function (type) {
+this._unregisterKey(this.key);
+if (!metaDatas[type]) {
+metaDatas[type] = {};
+}
+this._metaData = metaDatas[type];
+if (!metaArrays[type]) {
+metaArrays[type] = [];
+}
+this.list = metaArrays[type];
+this._registerKeyValue(this.key, this.value);
+},
+byKey: function (key) {
+return this._metaData && this._metaData[key];
+},
+_resetRegistration: function (oldKey) {
+this._unregisterKey(oldKey);
+this._registerKeyValue(this.key, this.value);
+},
+_unregisterKey: function (key) {
+this._unregister(key, this._metaData, this.list);
+},
+_registerKeyValue: function (key, value) {
+this._register(key, value, this._metaData, this.list);
+},
+_register: function (key, value, data, list) {
+if (key && data && value !== undefined) {
+data[key] = value;
+list.push(value);
+}
+},
+_unregister: function (key, data, list) {
+if (key && data) {
+if (key in data) {
+var value = data[key];
+delete data[key];
+this.arrayDelete(list, value);
+}
+}
+}
+});
+Polymer.IronMeta.getIronMeta = function getIronMeta() {
+if (singleton === null) {
+singleton = new Polymer.IronMeta();
+}
+return singleton;
+};
+Polymer.IronMetaQuery = Polymer({
+is: 'iron-meta-query',
+properties: {
+type: {
+type: String,
+value: 'default',
+observer: '_typeChanged'
+},
+key: {
+type: String,
+observer: '_keyChanged'
+},
+value: {
+type: Object,
+notify: true,
+readOnly: true
+},
+list: {
+type: Array,
+notify: true
+}
+},
+factoryImpl: function (config) {
+if (config) {
+for (var n in config) {
+switch (n) {
+case 'type':
+case 'key':
+this[n] = config[n];
+break;
+}
+}
+}
+},
+created: function () {
+this._metaDatas = metaDatas;
+this._metaArrays = metaArrays;
+},
+_keyChanged: function (key) {
+this._setValue(this._metaData && this._metaData[key]);
+},
+_typeChanged: function (type) {
+this._metaData = metaDatas[type];
+this.list = metaArrays[type];
+if (this.key) {
+this._keyChanged(this.key);
+}
+},
+byKey: function (key) {
+return this._metaData && this._metaData[key];
+}
+});
+}());
+Polymer({
+is: 'iron-icon',
+properties: {
+icon: {
+type: String,
+observer: '_iconChanged'
+},
+theme: {
+type: String,
+observer: '_updateIcon'
+},
+src: {
+type: String,
+observer: '_srcChanged'
+},
+_meta: { value: Polymer.Base.create('iron-meta', { type: 'iconset' }) }
+},
+_DEFAULT_ICONSET: 'icons',
+_iconChanged: function (icon) {
+var parts = (icon || '').split(':');
+this._iconName = parts.pop();
+this._iconsetName = parts.pop() || this._DEFAULT_ICONSET;
+this._updateIcon();
+},
+_srcChanged: function (src) {
+this._updateIcon();
+},
+_usesIconset: function () {
+return this.icon || !this.src;
+},
+_updateIcon: function () {
+if (this._usesIconset()) {
+if (this._iconsetName) {
+this._iconset = this._meta.byKey(this._iconsetName);
+if (this._iconset) {
+this._iconset.applyIcon(this, this._iconName, this.theme);
+this.unlisten(window, 'iron-iconset-added', '_updateIcon');
+} else {
+this.listen(window, 'iron-iconset-added', '_updateIcon');
+}
+}
+} else {
+if (!this._img) {
+this._img = document.createElement('img');
+this._img.style.width = '100%';
+this._img.style.height = '100%';
+this._img.draggable = false;
+}
+this._img.src = this.src;
+Polymer.dom(this.root).appendChild(this._img);
+}
+}
+});
+(function () {
+'use strict';
+var KEY_IDENTIFIER = {
+'U+0008': 'backspace',
+'U+0009': 'tab',
+'U+001B': 'esc',
+'U+0020': 'space',
+'U+007F': 'del'
+};
+var KEY_CODE = {
+8: 'backspace',
+9: 'tab',
+13: 'enter',
+27: 'esc',
+33: 'pageup',
+34: 'pagedown',
+35: 'end',
+36: 'home',
+32: 'space',
+37: 'left',
+38: 'up',
+39: 'right',
+40: 'down',
+46: 'del',
+106: '*'
+};
+var MODIFIER_KEYS = {
+'shift': 'shiftKey',
+'ctrl': 'ctrlKey',
+'alt': 'altKey',
+'meta': 'metaKey'
+};
+var KEY_CHAR = /[a-z0-9*]/;
+var IDENT_CHAR = /U\+/;
+var ARROW_KEY = /^arrow/;
+var SPACE_KEY = /^space(bar)?/;
+function transformKey(key, noSpecialChars) {
+var validKey = '';
+if (key) {
+var lKey = key.toLowerCase();
+if (lKey === ' ' || SPACE_KEY.test(lKey)) {
+validKey = 'space';
+} else if (lKey.length == 1) {
+if (!noSpecialChars || KEY_CHAR.test(lKey)) {
+validKey = lKey;
+}
+} else if (ARROW_KEY.test(lKey)) {
+validKey = lKey.replace('arrow', '');
+} else if (lKey == 'multiply') {
+validKey = '*';
+} else {
+validKey = lKey;
+}
+}
+return validKey;
+}
+function transformKeyIdentifier(keyIdent) {
+var validKey = '';
+if (keyIdent) {
+if (keyIdent in KEY_IDENTIFIER) {
+validKey = KEY_IDENTIFIER[keyIdent];
+} else if (IDENT_CHAR.test(keyIdent)) {
+keyIdent = parseInt(keyIdent.replace('U+', '0x'), 16);
+validKey = String.fromCharCode(keyIdent).toLowerCase();
+} else {
+validKey = keyIdent.toLowerCase();
+}
+}
+return validKey;
+}
+function transformKeyCode(keyCode) {
+var validKey = '';
+if (Number(keyCode)) {
+if (keyCode >= 65 && keyCode <= 90) {
+validKey = String.fromCharCode(32 + keyCode);
+} else if (keyCode >= 112 && keyCode <= 123) {
+validKey = 'f' + (keyCode - 112);
+} else if (keyCode >= 48 && keyCode <= 57) {
+validKey = String(48 - keyCode);
+} else if (keyCode >= 96 && keyCode <= 105) {
+validKey = String(96 - keyCode);
+} else {
+validKey = KEY_CODE[keyCode];
+}
+}
+return validKey;
+}
+function normalizedKeyForEvent(keyEvent, noSpecialChars) {
+return transformKey(keyEvent.key, noSpecialChars) || transformKeyIdentifier(keyEvent.keyIdentifier) || transformKeyCode(keyEvent.keyCode) || transformKey(keyEvent.detail.key, noSpecialChars) || '';
+}
+function keyComboMatchesEvent(keyCombo, event) {
+var keyEvent = normalizedKeyForEvent(event, keyCombo.hasModifiers);
+return keyEvent === keyCombo.key && (!keyCombo.hasModifiers || !!event.shiftKey === !!keyCombo.shiftKey && !!event.ctrlKey === !!keyCombo.ctrlKey && !!event.altKey === !!keyCombo.altKey && !!event.metaKey === !!keyCombo.metaKey);
+}
+function parseKeyComboString(keyComboString) {
+if (keyComboString.length === 1) {
+return {
+combo: keyComboString,
+key: keyComboString,
+event: 'keydown'
+};
+}
+return keyComboString.split('+').reduce(function (parsedKeyCombo, keyComboPart) {
+var eventParts = keyComboPart.split(':');
+var keyName = eventParts[0];
+var event = eventParts[1];
+if (keyName in MODIFIER_KEYS) {
+parsedKeyCombo[MODIFIER_KEYS[keyName]] = true;
+parsedKeyCombo.hasModifiers = true;
+} else {
+parsedKeyCombo.key = keyName;
+parsedKeyCombo.event = event || 'keydown';
+}
+return parsedKeyCombo;
+}, { combo: keyComboString.split(':').shift() });
+}
+function parseEventString(eventString) {
+return eventString.trim().split(' ').map(function (keyComboString) {
+return parseKeyComboString(keyComboString);
+});
+}
+Polymer.IronA11yKeysBehavior = {
+properties: {
+keyEventTarget: {
+type: Object,
+value: function () {
+return this;
+}
+},
+stopKeyboardEventPropagation: {
+type: Boolean,
+value: false
+},
+_boundKeyHandlers: {
+type: Array,
+value: function () {
+return [];
+}
+},
+_imperativeKeyBindings: {
+type: Object,
+value: function () {
+return {};
+}
+}
+},
+observers: ['_resetKeyEventListeners(keyEventTarget, _boundKeyHandlers)'],
+keyBindings: {},
+registered: function () {
+this._prepKeyBindings();
+},
+attached: function () {
+this._listenKeyEventListeners();
+},
+detached: function () {
+this._unlistenKeyEventListeners();
+},
+addOwnKeyBinding: function (eventString, handlerName) {
+this._imperativeKeyBindings[eventString] = handlerName;
+this._prepKeyBindings();
+this._resetKeyEventListeners();
+},
+removeOwnKeyBindings: function () {
+this._imperativeKeyBindings = {};
+this._prepKeyBindings();
+this._resetKeyEventListeners();
+},
+keyboardEventMatchesKeys: function (event, eventString) {
+var keyCombos = parseEventString(eventString);
+for (var i = 0; i < keyCombos.length; ++i) {
+if (keyComboMatchesEvent(keyCombos[i], event)) {
+return true;
+}
+}
+return false;
+},
+_collectKeyBindings: function () {
+var keyBindings = this.behaviors.map(function (behavior) {
+return behavior.keyBindings;
+});
+if (keyBindings.indexOf(this.keyBindings) === -1) {
+keyBindings.push(this.keyBindings);
+}
+return keyBindings;
+},
+_prepKeyBindings: function () {
+this._keyBindings = {};
+this._collectKeyBindings().forEach(function (keyBindings) {
+for (var eventString in keyBindings) {
+this._addKeyBinding(eventString, keyBindings[eventString]);
+}
+}, this);
+for (var eventString in this._imperativeKeyBindings) {
+this._addKeyBinding(eventString, this._imperativeKeyBindings[eventString]);
+}
+for (var eventName in this._keyBindings) {
+this._keyBindings[eventName].sort(function (kb1, kb2) {
+var b1 = kb1[0].hasModifiers;
+var b2 = kb2[0].hasModifiers;
+return b1 === b2 ? 0 : b1 ? -1 : 1;
+});
+}
+},
+_addKeyBinding: function (eventString, handlerName) {
+parseEventString(eventString).forEach(function (keyCombo) {
+this._keyBindings[keyCombo.event] = this._keyBindings[keyCombo.event] || [];
+this._keyBindings[keyCombo.event].push([
+keyCombo,
+handlerName
+]);
+}, this);
+},
+_resetKeyEventListeners: function () {
+this._unlistenKeyEventListeners();
+if (this.isAttached) {
+this._listenKeyEventListeners();
+}
+},
+_listenKeyEventListeners: function () {
+Object.keys(this._keyBindings).forEach(function (eventName) {
+var keyBindings = this._keyBindings[eventName];
+var boundKeyHandler = this._onKeyBindingEvent.bind(this, keyBindings);
+this._boundKeyHandlers.push([
+this.keyEventTarget,
+eventName,
+boundKeyHandler
+]);
+this.keyEventTarget.addEventListener(eventName, boundKeyHandler);
+}, this);
+},
+_unlistenKeyEventListeners: function () {
+var keyHandlerTuple;
+var keyEventTarget;
+var eventName;
+var boundKeyHandler;
+while (this._boundKeyHandlers.length) {
+keyHandlerTuple = this._boundKeyHandlers.pop();
+keyEventTarget = keyHandlerTuple[0];
+eventName = keyHandlerTuple[1];
+boundKeyHandler = keyHandlerTuple[2];
+keyEventTarget.removeEventListener(eventName, boundKeyHandler);
+}
+},
+_onKeyBindingEvent: function (keyBindings, event) {
+if (this.stopKeyboardEventPropagation) {
+event.stopPropagation();
+}
+if (event.defaultPrevented) {
+return;
+}
+for (var i = 0; i < keyBindings.length; i++) {
+var keyCombo = keyBindings[i][0];
+var handlerName = keyBindings[i][1];
+if (keyComboMatchesEvent(keyCombo, event)) {
+this._triggerKeyHandler(keyCombo, handlerName, event);
+if (event.defaultPrevented) {
+return;
+}
+}
+}
+},
+_triggerKeyHandler: function (keyCombo, handlerName, keyboardEvent) {
+var detail = Object.create(keyCombo);
+detail.keyboardEvent = keyboardEvent;
+var event = new CustomEvent(keyCombo.event, {
+detail: detail,
+cancelable: true
+});
+this[handlerName].call(this, event);
+if (event.defaultPrevented) {
+keyboardEvent.preventDefault();
+}
+}
+};
+}());
+(function () {
+var Utility = {
+distance: function (x1, y1, x2, y2) {
+var xDelta = x1 - x2;
+var yDelta = y1 - y2;
+return Math.sqrt(xDelta * xDelta + yDelta * yDelta);
+},
+now: window.performance && window.performance.now ? window.performance.now.bind(window.performance) : Date.now
+};
+function ElementMetrics(element) {
+this.element = element;
+this.width = this.boundingRect.width;
+this.height = this.boundingRect.height;
+this.size = Math.max(this.width, this.height);
+}
+ElementMetrics.prototype = {
+get boundingRect() {
+return this.element.getBoundingClientRect();
+},
+furthestCornerDistanceFrom: function (x, y) {
+var topLeft = Utility.distance(x, y, 0, 0);
+var topRight = Utility.distance(x, y, this.width, 0);
+var bottomLeft = Utility.distance(x, y, 0, this.height);
+var bottomRight = Utility.distance(x, y, this.width, this.height);
+return Math.max(topLeft, topRight, bottomLeft, bottomRight);
+}
+};
+function Ripple(element) {
+this.element = element;
+this.color = window.getComputedStyle(element).color;
+this.wave = document.createElement('div');
+this.waveContainer = document.createElement('div');
+this.wave.style.backgroundColor = this.color;
+this.wave.classList.add('wave');
+this.waveContainer.classList.add('wave-container');
+Polymer.dom(this.waveContainer).appendChild(this.wave);
+this.resetInteractionState();
+}
+Ripple.MAX_RADIUS = 300;
+Ripple.prototype = {
+get recenters() {
+return this.element.recenters;
+},
+get center() {
+return this.element.center;
+},
+get mouseDownElapsed() {
+var elapsed;
+if (!this.mouseDownStart) {
+return 0;
+}
+elapsed = Utility.now() - this.mouseDownStart;
+if (this.mouseUpStart) {
+elapsed -= this.mouseUpElapsed;
+}
+return elapsed;
+},
+get mouseUpElapsed() {
+return this.mouseUpStart ? Utility.now() - this.mouseUpStart : 0;
+},
+get mouseDownElapsedSeconds() {
+return this.mouseDownElapsed / 1000;
+},
+get mouseUpElapsedSeconds() {
+return this.mouseUpElapsed / 1000;
+},
+get mouseInteractionSeconds() {
+return this.mouseDownElapsedSeconds + this.mouseUpElapsedSeconds;
+},
+get initialOpacity() {
+return this.element.initialOpacity;
+},
+get opacityDecayVelocity() {
+return this.element.opacityDecayVelocity;
+},
+get radius() {
+var width2 = this.containerMetrics.width * this.containerMetrics.width;
+var height2 = this.containerMetrics.height * this.containerMetrics.height;
+var waveRadius = Math.min(Math.sqrt(width2 + height2), Ripple.MAX_RADIUS) * 1.1 + 5;
+var duration = 1.1 - 0.2 * (waveRadius / Ripple.MAX_RADIUS);
+var timeNow = this.mouseInteractionSeconds / duration;
+var size = waveRadius * (1 - Math.pow(80, -timeNow));
+return Math.abs(size);
+},
+get opacity() {
+if (!this.mouseUpStart) {
+return this.initialOpacity;
+}
+return Math.max(0, this.initialOpacity - this.mouseUpElapsedSeconds * this.opacityDecayVelocity);
+},
+get outerOpacity() {
+var outerOpacity = this.mouseUpElapsedSeconds * 0.3;
+var waveOpacity = this.opacity;
+return Math.max(0, Math.min(outerOpacity, waveOpacity));
+},
+get isOpacityFullyDecayed() {
+return this.opacity < 0.01 && this.radius >= Math.min(this.maxRadius, Ripple.MAX_RADIUS);
+},
+get isRestingAtMaxRadius() {
+return this.opacity >= this.initialOpacity && this.radius >= Math.min(this.maxRadius, Ripple.MAX_RADIUS);
+},
+get isAnimationComplete() {
+return this.mouseUpStart ? this.isOpacityFullyDecayed : this.isRestingAtMaxRadius;
+},
+get translationFraction() {
+return Math.min(1, this.radius / this.containerMetrics.size * 2 / Math.sqrt(2));
+},
+get xNow() {
+if (this.xEnd) {
+return this.xStart + this.translationFraction * (this.xEnd - this.xStart);
+}
+return this.xStart;
+},
+get yNow() {
+if (this.yEnd) {
+return this.yStart + this.translationFraction * (this.yEnd - this.yStart);
+}
+return this.yStart;
+},
+get isMouseDown() {
+return this.mouseDownStart && !this.mouseUpStart;
+},
+resetInteractionState: function () {
+this.maxRadius = 0;
+this.mouseDownStart = 0;
+this.mouseUpStart = 0;
+this.xStart = 0;
+this.yStart = 0;
+this.xEnd = 0;
+this.yEnd = 0;
+this.slideDistance = 0;
+this.containerMetrics = new ElementMetrics(this.element);
+},
+draw: function () {
+var scale;
+var translateString;
+var dx;
+var dy;
+this.wave.style.opacity = this.opacity;
+scale = this.radius / (this.containerMetrics.size / 2);
+dx = this.xNow - this.containerMetrics.width / 2;
+dy = this.yNow - this.containerMetrics.height / 2;
+this.waveContainer.style.webkitTransform = 'translate(' + dx + 'px, ' + dy + 'px)';
+this.waveContainer.style.transform = 'translate3d(' + dx + 'px, ' + dy + 'px, 0)';
+this.wave.style.webkitTransform = 'scale(' + scale + ',' + scale + ')';
+this.wave.style.transform = 'scale3d(' + scale + ',' + scale + ',1)';
+},
+downAction: function (event) {
+var xCenter = this.containerMetrics.width / 2;
+var yCenter = this.containerMetrics.height / 2;
+this.resetInteractionState();
+this.mouseDownStart = Utility.now();
+if (this.center) {
+this.xStart = xCenter;
+this.yStart = yCenter;
+this.slideDistance = Utility.distance(this.xStart, this.yStart, this.xEnd, this.yEnd);
+} else {
+this.xStart = event ? event.detail.x - this.containerMetrics.boundingRect.left : this.containerMetrics.width / 2;
+this.yStart = event ? event.detail.y - this.containerMetrics.boundingRect.top : this.containerMetrics.height / 2;
+}
+if (this.recenters) {
+this.xEnd = xCenter;
+this.yEnd = yCenter;
+this.slideDistance = Utility.distance(this.xStart, this.yStart, this.xEnd, this.yEnd);
+}
+this.maxRadius = this.containerMetrics.furthestCornerDistanceFrom(this.xStart, this.yStart);
+this.waveContainer.style.top = (this.containerMetrics.height - this.containerMetrics.size) / 2 + 'px';
+this.waveContainer.style.left = (this.containerMetrics.width - this.containerMetrics.size) / 2 + 'px';
+this.waveContainer.style.width = this.containerMetrics.size + 'px';
+this.waveContainer.style.height = this.containerMetrics.size + 'px';
+},
+upAction: function (event) {
+if (!this.isMouseDown) {
+return;
+}
+this.mouseUpStart = Utility.now();
+},
+remove: function () {
+Polymer.dom(this.waveContainer.parentNode).removeChild(this.waveContainer);
+}
+};
+Polymer({
+is: 'paper-ripple',
+behaviors: [Polymer.IronA11yKeysBehavior],
+properties: {
+initialOpacity: {
+type: Number,
+value: 0.25
+},
+opacityDecayVelocity: {
+type: Number,
+value: 0.8
+},
+recenters: {
+type: Boolean,
+value: false
+},
+center: {
+type: Boolean,
+value: false
+},
+ripples: {
+type: Array,
+value: function () {
+return [];
+}
+},
+animating: {
+type: Boolean,
+readOnly: true,
+reflectToAttribute: true,
+value: false
+},
+holdDown: {
+type: Boolean,
+value: false,
+observer: '_holdDownChanged'
+},
+noink: {
+type: Boolean,
+value: false
+},
+_animating: { type: Boolean },
+_boundAnimate: {
+type: Function,
+value: function () {
+return this.animate.bind(this);
+}
+}
+},
+get target() {
+var ownerRoot = Polymer.dom(this).getOwnerRoot();
+var target;
+if (this.parentNode.nodeType == 11) {
+target = ownerRoot.host;
+} else {
+target = this.parentNode;
+}
+return target;
+},
+keyBindings: {
+'enter:keydown': '_onEnterKeydown',
+'space:keydown': '_onSpaceKeydown',
+'space:keyup': '_onSpaceKeyup'
+},
+attached: function () {
+this.keyEventTarget = this.target;
+this.listen(this.target, 'up', 'uiUpAction');
+this.listen(this.target, 'down', 'uiDownAction');
+},
+detached: function () {
+this.unlisten(this.target, 'up', 'uiUpAction');
+this.unlisten(this.target, 'down', 'uiDownAction');
+},
+get shouldKeepAnimating() {
+for (var index = 0; index < this.ripples.length; ++index) {
+if (!this.ripples[index].isAnimationComplete) {
+return true;
+}
+}
+return false;
+},
+simulatedRipple: function () {
+this.downAction(null);
+this.async(function () {
+this.upAction();
+}, 1);
+},
+uiDownAction: function (event) {
+if (!this.noink) {
+this.downAction(event);
+}
+},
+downAction: function (event) {
+if (this.holdDown && this.ripples.length > 0) {
+return;
+}
+var ripple = this.addRipple();
+ripple.downAction(event);
+if (!this._animating) {
+this.animate();
+}
+},
+uiUpAction: function (event) {
+if (!this.noink) {
+this.upAction(event);
+}
+},
+upAction: function (event) {
+if (this.holdDown) {
+return;
+}
+this.ripples.forEach(function (ripple) {
+ripple.upAction(event);
+});
+this.animate();
+},
+onAnimationComplete: function () {
+this._animating = false;
+this.$.background.style.backgroundColor = null;
+this.fire('transitionend');
+},
+addRipple: function () {
+var ripple = new Ripple(this);
+Polymer.dom(this.$.waves).appendChild(ripple.waveContainer);
+this.$.background.style.backgroundColor = ripple.color;
+this.ripples.push(ripple);
+this._setAnimating(true);
+return ripple;
+},
+removeRipple: function (ripple) {
+var rippleIndex = this.ripples.indexOf(ripple);
+if (rippleIndex < 0) {
+return;
+}
+this.ripples.splice(rippleIndex, 1);
+ripple.remove();
+if (!this.ripples.length) {
+this._setAnimating(false);
+}
+},
+animate: function () {
+var index;
+var ripple;
+this._animating = true;
+for (index = 0; index < this.ripples.length; ++index) {
+ripple = this.ripples[index];
+ripple.draw();
+this.$.background.style.opacity = ripple.outerOpacity;
+if (ripple.isOpacityFullyDecayed && !ripple.isRestingAtMaxRadius) {
+this.removeRipple(ripple);
+}
+}
+if (!this.shouldKeepAnimating && this.ripples.length === 0) {
+this.onAnimationComplete();
+} else {
+window.requestAnimationFrame(this._boundAnimate);
+}
+},
+_onEnterKeydown: function () {
+this.uiDownAction();
+this.async(this.uiUpAction, 1);
+},
+_onSpaceKeydown: function () {
+this.uiDownAction();
+},
+_onSpaceKeyup: function () {
+this.uiUpAction();
+},
+_holdDownChanged: function (newVal, oldVal) {
+if (oldVal === undefined) {
+return;
+}
+if (newVal) {
+this.downAction();
+} else {
+this.upAction();
+}
+}
+});
+}());
+Polymer({
+is: 'paper-material',
+properties: {
+elevation: {
+type: Number,
+reflectToAttribute: true,
+value: 1
+},
+animated: {
+type: Boolean,
+reflectToAttribute: true,
+value: false
+}
+}
+});
+Polymer({
+is: 'iron-iconset-svg',
+properties: {
+name: {
+type: String,
+observer: '_nameChanged'
+},
+size: {
+type: Number,
+value: 24
+}
+},
+attached: function () {
+this.style.display = 'none';
+},
+getIconNames: function () {
+this._icons = this._createIconMap();
+return Object.keys(this._icons).map(function (n) {
+return this.name + ':' + n;
+}, this);
+},
+applyIcon: function (element, iconName) {
+element = element.root || element;
+this.removeIcon(element);
+var svg = this._cloneIcon(iconName);
+if (svg) {
+var pde = Polymer.dom(element);
+pde.insertBefore(svg, pde.childNodes[0]);
+return element._svgIcon = svg;
+}
+return null;
+},
+removeIcon: function (element) {
+if (element._svgIcon) {
+Polymer.dom(element).removeChild(element._svgIcon);
+element._svgIcon = null;
+}
+},
+_nameChanged: function () {
+new Polymer.IronMeta({
+type: 'iconset',
+key: this.name,
+value: this
+});
+this.async(function () {
+this.fire('iron-iconset-added', this, { node: window });
+});
+},
+_createIconMap: function () {
+var icons = Object.create(null);
+Polymer.dom(this).querySelectorAll('[id]').forEach(function (icon) {
+icons[icon.id] = icon;
+});
+return icons;
+},
+_cloneIcon: function (id) {
+this._icons = this._icons || this._createIconMap();
+return this._prepareSvgClone(this._icons[id], this.size);
+},
+_prepareSvgClone: function (sourceSvg, size) {
+if (sourceSvg) {
+var content = sourceSvg.cloneNode(true), svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'), viewBox = content.getAttribute('viewBox') || '0 0 ' + size + ' ' + size;
+svg.setAttribute('viewBox', viewBox);
+svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+svg.style.cssText = 'pointer-events: none; display: block; width: 100%; height: 100%;';
+svg.appendChild(content).removeAttribute('id');
+return svg;
+}
+return null;
+}
+});
+(function () {
+var BrandValue = {
+GOOGLE: 'google',
+PLUS: 'google-plus'
+};
+var HeightValue = {
+SHORT: 'short',
+STANDARD: 'standard',
+TALL: 'tall'
+};
+var LabelValue = {
+STANDARD: 'Sign in',
+WIDE: 'Sign in with Google',
+WIDE_PLUS: 'Sign in with Google+'
+};
+var ThemeValue = {
+LIGHT: 'light',
+DARK: 'dark'
+};
+var WidthValue = {
+ICON_ONLY: 'iconOnly',
+STANDARD: 'standard',
+WIDE: 'wide'
+};
+Polymer({
+is: 'google-signin',
+properties: {
+appPackageName: {
+type: String,
+value: ''
+},
+brand: {
+type: String,
+value: ''
+},
+_brand: {
+type: String,
+computed: '_computeBrand(brand, hasPlusScopes)'
+},
+clientId: {
+type: String,
+value: ''
+},
+cookiePolicy: {
+type: String,
+value: ''
+},
+height: {
+type: String,
+value: 'standard'
+},
+fill: {
+type: Boolean,
+value: true
+},
+labelAdditional: {
+type: String,
+value: 'Additional permissions required'
+},
+labelSignin: {
+type: String,
+value: ''
+},
+_labelSignin: {
+type: String,
+computed: '_computeSigninLabel(labelSignin, width, _brand)'
+},
+labelSignout: {
+type: String,
+value: 'Sign out'
+},
+raised: {
+type: Boolean,
+value: false
+},
+requestVisibleActions: {
+type: String,
+value: ''
+},
+hostedDomain: {
+type: String,
+value: ''
+},
+offline: {
+type: Boolean,
+value: false
+},
+offlineAlwaysPrompt: {
+type: Boolean,
+value: false
+},
+scopes: {
+type: String,
+value: ''
+},
+theme: {
+type: String,
+value: 'dark'
+},
+width: {
+type: String,
+value: 'standard'
+},
+_brandIcon: {
+type: String,
+computed: '_computeIcon(_brand)'
+},
+hasPlusScopes: {
+type: Boolean,
+notify: true,
+value: false
+},
+needAdditionalAuth: {
+type: Boolean,
+value: false
+},
+signedIn: {
+type: Boolean,
+notify: true,
+value: false,
+observer: '_observeSignedIn'
+},
+isAuthorized: {
+type: Boolean,
+notify: true,
+value: false
+}
+},
+_computeButtonClass: function (height, width, theme, signedIn, brand, needAdditionalAuth) {
+return 'height-' + height + ' width-' + width + ' theme-' + theme + ' signedIn-' + signedIn + ' brand-' + brand + '  additionalAuth-' + needAdditionalAuth;
+},
+_computeIcon: function (brand) {
+return 'google:' + brand;
+},
+_computeButtonIsSignIn: function (signedIn, additionalAuth) {
+return !signedIn;
+},
+_computeButtonIsSignOut: function (signedIn, additionalAuth) {
+return signedIn && !additionalAuth;
+},
+_computeButtonIsSignOutAddl: function (signedIn, additionalAuth) {
+return signedIn && additionalAuth;
+},
+_computeBrand: function (attrBrand, hasPlusScopes) {
+var newBrand;
+if (attrBrand) {
+newBrand = attrBrand;
+} else if (hasPlusScopes) {
+newBrand = BrandValue.PLUS;
+} else {
+newBrand = BrandValue.GOOGLE;
+}
+;
+return newBrand;
+},
+_observeSignedIn: function (newVal, oldVal) {
+if (newVal) {
+if (this.needAdditionalAuth)
+this.fire('google-signin-necessary');
+this.fire('google-signin-success');
+} else
+this.fire('google-signed-out');
+},
+_computeSigninLabel: function (labelSignin, width, _brand) {
+if (labelSignin) {
+return labelSignin;
+} else {
+switch (width) {
+case WidthValue.WIDE:
+return _brand == BrandValue.PLUS ? LabelValue.WIDE_PLUS : LabelValue.WIDE;
+case WidthValue.STANDARD:
+return LabelValue.STANDARD;
+case WidthValue.ICON_ONLY:
+return '';
+default:
+console.warn('bad width value: ', width);
+return LabelValue.STANDARD;
+}
+}
+},
+signIn: function () {
+this.$.aware.signIn();
+},
+_signInKeyPress: function (e) {
+if (e.which == 13 || e.keyCode == 13 || e.which == 32 || e.keyCode == 32) {
+e.preventDefault();
+this.signIn();
+}
+},
+signOut: function () {
+this.fire('google-signout-attempted');
+this.$.aware.signOut();
+},
+_signOutKeyPress: function (e) {
+if (e.which == 13 || e.keyCode == 13 || e.which == 32 || e.keyCode == 32) {
+e.preventDefault();
+this.signOut();
+}
+}
+});
+}());
+function MakePromise(asap) {
+function Promise(fn) {
+if (typeof this !== 'object' || typeof fn !== 'function')
+throw new TypeError();
+this._state = null;
+this._value = null;
+this._deferreds = [];
+doResolve(fn, resolve.bind(this), reject.bind(this));
+}
+function handle(deferred) {
+var me = this;
+if (this._state === null) {
+this._deferreds.push(deferred);
+return;
+}
+asap(function () {
+var cb = me._state ? deferred.onFulfilled : deferred.onRejected;
+if (typeof cb !== 'function') {
+(me._state ? deferred.resolve : deferred.reject)(me._value);
+return;
+}
+var ret;
+try {
+ret = cb(me._value);
+} catch (e) {
+deferred.reject(e);
+return;
+}
+deferred.resolve(ret);
+});
+}
+function resolve(newValue) {
+try {
+if (newValue === this)
+throw new TypeError();
+if (newValue && (typeof newValue === 'object' || typeof newValue === 'function')) {
+var then = newValue.then;
+if (typeof then === 'function') {
+doResolve(then.bind(newValue), resolve.bind(this), reject.bind(this));
+return;
+}
+}
+this._state = true;
+this._value = newValue;
+finale.call(this);
+} catch (e) {
+reject.call(this, e);
+}
+}
+function reject(newValue) {
+this._state = false;
+this._value = newValue;
+finale.call(this);
+}
+function finale() {
+for (var i = 0, len = this._deferreds.length; i < len; i++) {
+handle.call(this, this._deferreds[i]);
+}
+this._deferreds = null;
+}
+function doResolve(fn, onFulfilled, onRejected) {
+var done = false;
+try {
+fn(function (value) {
+if (done)
+return;
+done = true;
+onFulfilled(value);
+}, function (reason) {
+if (done)
+return;
+done = true;
+onRejected(reason);
+});
+} catch (ex) {
+if (done)
+return;
+done = true;
+onRejected(ex);
+}
+}
+Promise.prototype['catch'] = function (onRejected) {
+return this.then(null, onRejected);
+};
+Promise.prototype.then = function (onFulfilled, onRejected) {
+var me = this;
+return new Promise(function (resolve, reject) {
+handle.call(me, {
+onFulfilled: onFulfilled,
+onRejected: onRejected,
+resolve: resolve,
+reject: reject
+});
+});
+};
+Promise.resolve = function (value) {
+if (value && typeof value === 'object' && value.constructor === Promise) {
+return value;
+}
+return new Promise(function (resolve) {
+resolve(value);
+});
+};
+Promise.reject = function (value) {
+return new Promise(function (resolve, reject) {
+reject(value);
+});
+};
+return Promise;
+}
+if (typeof module !== 'undefined') {
+module.exports = MakePromise;
+};
+if (!window.Promise) {
+window.Promise = MakePromise(Polymer.Base.async);
+};
+'use strict';
+Polymer({
+is: 'iron-request',
+hostAttributes: { hidden: true },
+properties: {
+xhr: {
+type: Object,
+notify: true,
+readOnly: true,
+value: function () {
+return new XMLHttpRequest();
+}
+},
+response: {
+type: Object,
+notify: true,
+readOnly: true,
+value: function () {
+return null;
+}
+},
+status: {
+type: Number,
+notify: true,
+readOnly: true,
+value: 0
+},
+statusText: {
+type: String,
+notify: true,
+readOnly: true,
+value: ''
+},
+completes: {
+type: Object,
+readOnly: true,
+notify: true,
+value: function () {
+return new Promise(function (resolve, reject) {
+this.resolveCompletes = resolve;
+this.rejectCompletes = reject;
+}.bind(this));
+}
+},
+progress: {
+type: Object,
+notify: true,
+readOnly: true,
+value: function () {
+return {};
+}
+},
+aborted: {
+type: Boolean,
+notify: true,
+readOnly: true,
+value: false
+},
+errored: {
+type: Boolean,
+notify: true,
+readOnly: true,
+value: false
+},
+timedOut: {
+type: Boolean,
+notify: true,
+readOnly: true,
+value: false
+}
+},
+get succeeded() {
+if (this.errored || this.aborted || this.timedOut) {
+return false;
+}
+var status = this.xhr.status || 0;
+return status === 0 || status >= 200 && status < 300;
+},
+send: function (options) {
+var xhr = this.xhr;
+if (xhr.readyState > 0) {
+return null;
+}
+xhr.addEventListener('progress', function (progress) {
+this._setProgress({
+lengthComputable: progress.lengthComputable,
+loaded: progress.loaded,
+total: progress.total
+});
+}.bind(this));
+xhr.addEventListener('error', function (error) {
+this._setErrored(true);
+this._updateStatus();
+this.rejectCompletes(error);
+}.bind(this));
+xhr.addEventListener('timeout', function (error) {
+this._setTimedOut(true);
+this._updateStatus();
+this.rejectCompletes(error);
+}.bind(this));
+xhr.addEventListener('abort', function () {
+this._updateStatus();
+this.rejectCompletes(new Error('Request aborted.'));
+}.bind(this));
+xhr.addEventListener('loadend', function () {
+this._updateStatus();
+if (!this.succeeded) {
+this.rejectCompletes(new Error('The request failed with status code: ' + this.xhr.status));
+return;
+}
+this._setResponse(this.parseResponse());
+this.resolveCompletes(this);
+}.bind(this));
+this.url = options.url;
+xhr.open(options.method || 'GET', options.url, options.async !== false);
+var acceptType = {
+'json': 'application/json',
+'text': 'text/plain',
+'html': 'text/html',
+'xml': 'application/xml',
+'arraybuffer': 'application/octet-stream'
+}[options.handleAs];
+var headers = options.headers || Object.create(null);
+var newHeaders = Object.create(null);
+for (var key in headers) {
+newHeaders[key.toLowerCase()] = headers[key];
+}
+headers = newHeaders;
+if (acceptType && !headers['accept']) {
+headers['accept'] = acceptType;
+}
+Object.keys(headers).forEach(function (requestHeader) {
+if (/[A-Z]/.test(requestHeader)) {
+console.error('Headers must be lower case, got', requestHeader);
+}
+xhr.setRequestHeader(requestHeader, headers[requestHeader]);
+}, this);
+if (options.async !== false) {
+var handleAs = options.handleAs;
+if (!!options.jsonPrefix || !handleAs) {
+handleAs = 'text';
+}
+xhr.responseType = xhr._responseType = handleAs;
+if (!!options.jsonPrefix) {
+xhr._jsonPrefix = options.jsonPrefix;
+}
+}
+xhr.withCredentials = !!options.withCredentials;
+xhr.timeout = options.timeout;
+var body = this._encodeBodyObject(options.body, headers['content-type']);
+xhr.send(body);
+return this.completes;
+},
+parseResponse: function () {
+var xhr = this.xhr;
+var responseType = xhr.responseType || xhr._responseType;
+var preferResponseText = !this.xhr.responseType;
+var prefixLen = xhr._jsonPrefix && xhr._jsonPrefix.length || 0;
+try {
+switch (responseType) {
+case 'json':
+if (preferResponseText || xhr.response === undefined) {
+try {
+return JSON.parse(xhr.responseText);
+} catch (_) {
+return null;
+}
+}
+return xhr.response;
+case 'xml':
+return xhr.responseXML;
+case 'blob':
+case 'document':
+case 'arraybuffer':
+return xhr.response;
+case 'text':
+default: {
+if (prefixLen) {
+try {
+return JSON.parse(xhr.responseText.substring(prefixLen));
+} catch (_) {
+return null;
+}
+}
+return xhr.responseText;
+}
+}
+} catch (e) {
+this.rejectCompletes(new Error('Could not parse response. ' + e.message));
+}
+},
+abort: function () {
+this._setAborted(true);
+this.xhr.abort();
+},
+_encodeBodyObject: function (body, contentType) {
+if (typeof body == 'string') {
+return body;
+}
+var bodyObj = body;
+switch (contentType) {
+case 'application/json':
+return JSON.stringify(bodyObj);
+case 'application/x-www-form-urlencoded':
+return this._wwwFormUrlEncode(bodyObj);
+}
+return body;
+},
+_wwwFormUrlEncode: function (object) {
+if (!object) {
+return '';
+}
+var pieces = [];
+Object.keys(object).forEach(function (key) {
+pieces.push(this._wwwFormUrlEncodePiece(key) + '=' + this._wwwFormUrlEncodePiece(object[key]));
+}, this);
+return pieces.join('&');
+},
+_wwwFormUrlEncodePiece: function (str) {
+return encodeURIComponent(str.toString().replace(/\r?\n/g, '\r\n')).replace(/%20/g, '+');
+},
+_updateStatus: function () {
+this._setStatus(this.xhr.status);
+this._setStatusText(this.xhr.statusText === undefined ? '' : this.xhr.statusText);
+}
+});
+'use strict';
+Polymer({
+is: 'iron-ajax',
+hostAttributes: { hidden: true },
+properties: {
+url: { type: String },
+params: {
+type: Object,
+value: function () {
+return {};
+}
+},
+method: {
+type: String,
+value: 'GET'
+},
+headers: {
+type: Object,
+value: function () {
+return {};
+}
+},
+contentType: {
+type: String,
+value: null
+},
+body: {
+type: Object,
+value: null
+},
+sync: {
+type: Boolean,
+value: false
+},
+handleAs: {
+type: String,
+value: 'json'
+},
+withCredentials: {
+type: Boolean,
+value: false
+},
+timeout: {
+type: Number,
+value: 0
+},
+auto: {
+type: Boolean,
+value: false
+},
+verbose: {
+type: Boolean,
+value: false
+},
+lastRequest: {
+type: Object,
+notify: true,
+readOnly: true
+},
+loading: {
+type: Boolean,
+notify: true,
+readOnly: true
+},
+lastResponse: {
+type: Object,
+notify: true,
+readOnly: true
+},
+lastError: {
+type: Object,
+notify: true,
+readOnly: true
+},
+activeRequests: {
+type: Array,
+notify: true,
+readOnly: true,
+value: function () {
+return [];
+}
+},
+debounceDuration: {
+type: Number,
+value: 0,
+notify: true
+},
+jsonPrefix: {
+type: String,
+value: ''
+},
+_boundHandleResponse: {
+type: Function,
+value: function () {
+return this._handleResponse.bind(this);
+}
+}
+},
+observers: ['_requestOptionsChanged(url, method, params.*, headers, contentType, ' + 'body, sync, handleAs, jsonPrefix, withCredentials, timeout, auto)'],
+get queryString() {
+var queryParts = [];
+var param;
+var value;
+for (param in this.params) {
+value = this.params[param];
+param = window.encodeURIComponent(param);
+if (Array.isArray(value)) {
+for (var i = 0; i < value.length; i++) {
+queryParts.push(param + '=' + window.encodeURIComponent(value[i]));
+}
+} else if (value !== null) {
+queryParts.push(param + '=' + window.encodeURIComponent(value));
+} else {
+queryParts.push(param);
+}
+}
+return queryParts.join('&');
+},
+get requestUrl() {
+var queryString = this.queryString;
+if (queryString) {
+var bindingChar = this.url.indexOf('?') >= 0 ? '&' : '?';
+return this.url + bindingChar + queryString;
+}
+return this.url;
+},
+get requestHeaders() {
+var headers = {};
+var contentType = this.contentType;
+if (contentType == null && typeof this.body === 'string') {
+contentType = 'application/x-www-form-urlencoded';
+}
+if (contentType) {
+headers['content-type'] = contentType;
+}
+var header;
+if (this.headers instanceof Object) {
+for (header in this.headers) {
+headers[header] = this.headers[header].toString();
+}
+}
+return headers;
+},
+toRequestOptions: function () {
+return {
+url: this.requestUrl || '',
+method: this.method,
+headers: this.requestHeaders,
+body: this.body,
+async: !this.sync,
+handleAs: this.handleAs,
+jsonPrefix: this.jsonPrefix,
+withCredentials: this.withCredentials,
+timeout: this.timeout
+};
+},
+generateRequest: function () {
+var request = document.createElement('iron-request');
+var requestOptions = this.toRequestOptions();
+this.activeRequests.push(request);
+request.completes.then(this._boundHandleResponse).catch(this._handleError.bind(this, request)).then(this._discardRequest.bind(this, request));
+request.send(requestOptions);
+this._setLastRequest(request);
+this._setLoading(true);
+this.fire('request', {
+request: request,
+options: requestOptions
+}, { bubbles: false });
+return request;
+},
+_handleResponse: function (request) {
+if (request === this.lastRequest) {
+this._setLastResponse(request.response);
+this._setLastError(null);
+this._setLoading(false);
+}
+this.fire('response', request, { bubbles: false });
+},
+_handleError: function (request, error) {
+if (this.verbose) {
+console.error(error);
+}
+if (request === this.lastRequest) {
+this._setLastError({
+request: request,
+error: error
+});
+this._setLastResponse(null);
+this._setLoading(false);
+}
+this.fire('error', {
+request: request,
+error: error
+}, { bubbles: false });
+},
+_discardRequest: function (request) {
+var requestIndex = this.activeRequests.indexOf(request);
+if (requestIndex > -1) {
+this.activeRequests.splice(requestIndex, 1);
+}
+},
+_requestOptionsChanged: function () {
+this.debounce('generate-request', function () {
+if (this.url == null) {
+return;
+}
+if (this.auto) {
+this.generateRequest();
+}
+}, this.debounceDuration);
+}
+});
+(function () {
+var SCOPE_ = 'https://spreadsheets.google.com/feeds';
+var rowDataCache_ = {};
+function generateCacheKey_() {
+return this._worksheetId + '_' + this.tabId;
+}
+function getLink_(rel, links) {
+for (var i = 0, link; link = links[i]; ++i) {
+if (link.rel === rel) {
+return link;
+}
+}
+return null;
+}
+function wid_to_gid_(wid) {
+return parseInt(String(wid), 36) ^ 31578;
+}
+function gid_to_wid_(gid) {
+return parseInt(gid ^ 31578).toString(36);
+}
+window.GoogleSheets = Polymer({
+is: 'google-sheets',
+hostAttributes: { hidden: true },
+properties: {
+clientId: {
+type: String,
+value: '',
+observer: '_configUpdate'
+},
+key: {
+type: String,
+value: '',
+observer: '_keyChanged'
+},
+tabId: {
+type: Number,
+value: 1,
+observer: '_configUpdate'
+},
+published: {
+type: Boolean,
+value: false,
+observer: '_configUpdate'
+},
+sheet: {
+type: Object,
+value: function () {
+return {};
+},
+readOnly: true,
+notify: true,
+observer: '_sheetChanged'
+},
+tab: {
+type: Object,
+value: function () {
+return {};
+},
+readOnly: true,
+notify: true,
+observer: '_tabChanged'
+},
+rows: {
+type: Array,
+value: function () {
+return [];
+},
+readOnly: true,
+notify: true
+},
+spreadsheets: {
+type: Array,
+readOnly: true,
+notify: true,
+value: function () {
+return [];
+}
+},
+openInGoogleDocsUrl: {
+type: String,
+computed: '_computeGoogleDocsUrl(key)',
+notify: true
+}
+},
+_worksheetId: null,
+_computeGoogleDocsUrl: function (key) {
+var url = 'https://docs.google.com/spreadsheet/';
+if (key) {
+url += 'ccc?key=' + key;
+}
+return url;
+},
+_configUpdate: function (key, published, tabId, clientId) {
+this._tabIdChanged();
+},
+_keyChanged: function (newValue, oldValue) {
+if (this.published) {
+var url = SCOPE_ + '/list/' + this.key + '/' + this.tabId + '/public/values';
+this.$.publicajax.url = url;
+this.$.publicajax.generateRequest();
+}
+},
+_tabIdChanged: function (newValue, oldValue) {
+if (this._worksheetId) {
+this._getCellRows();
+} else if (this.published) {
+this._keyChanged();
+}
+},
+_sheetChanged: function (newValue, oldValue) {
+if (!this.sheet.title) {
+return;
+}
+var authors = this.sheet.author && this.sheet.author.map(function (a) {
+return {
+email: a.email.$t,
+name: a.name.$t
+};
+});
+this.set('sheet.title', this.sheet.title.$t);
+this.set('sheet.updated', new Date(this.sheet.updated.$t));
+this.set('sheet.authors', authors);
+this._worksheetId = this.sheet.id.$t.split('/').slice(-1)[0];
+this._getWorksheet();
+},
+_tabChanged: function (newValue, oldValue) {
+if (!this.tab.title) {
+return;
+}
+var authors = this.tab.authors = this.tab.author && this.tab.author.map(function (a) {
+return {
+email: a.email.$t,
+name: a.name.$t
+};
+});
+this.set('tab.title', this.tab.title.$t);
+this.set('tab.updated', new Date(this.tab.updated.$t));
+this.set('tab.authors', authors);
+this.fire('google-sheet-data', {
+type: 'tab',
+data: this.tab
+});
+},
+_onSignInSuccess: function (e, detail) {
+var oauthToken = gapi.auth2.getAuthInstance().currentUser.get().getAuthResponse();
+var headers = { 'Authorization': 'Bearer ' + oauthToken.access_token };
+this.$.listsheetsajax.headers = headers;
+this.$.worksheetajax.headers = headers;
+this.$.cellrowsajax.headers = headers;
+this._listSpreadsheets();
+},
+_onSignInFail: function (e, detail) {
+console.log(e, e.type);
+},
+_listSpreadsheets: function () {
+var url = SCOPE_ + '/spreadsheets/private/full';
+this.$.listsheetsajax.url = url;
+this.$.listsheetsajax.generateRequest();
+},
+_onSpreadsheetList: function (e) {
+e.stopPropagation();
+var feed = e.target.lastResponse.feed;
+this._setSpreadsheets(feed.entry);
+this.fire('google-sheet-data', {
+type: 'spreadsheets',
+data: this.spreadsheets
+});
+if (this.key) {
+for (var i = 0, entry; entry = feed.entry[i]; ++i) {
+var altLink = getLink_('alternate', entry.link);
+if (altLink && altLink.href.indexOf(this.key) != -1) {
+this._setSheet(entry);
+break;
+}
+}
+}
+},
+_getWorksheet: function () {
+if (!this._worksheetId) {
+throw new Error('workesheetId was not given.');
+}
+var url = SCOPE_ + '/worksheets/' + this._worksheetId + '/private/full/' + this.tabId;
+this.$.worksheetajax.url = url;
+this.$.worksheetajax.generateRequest();
+},
+_onWorksheet: function (e) {
+e.stopPropagation();
+this._setTab(e.target.lastResponse.entry);
+this._getCellRows();
+},
+_getCellRows: function () {
+var key = generateCacheKey_.call(this);
+if (key in rowDataCache_) {
+this._onCellRows(null, null, rowDataCache_[key]);
+return;
+}
+var url = SCOPE_ + '/list/' + this._worksheetId + '/' + this.tabId + '/private/full';
+this.$.cellrowsajax.url = url;
+this.$.cellrowsajax.generateRequest();
+},
+_onCellRows: function (e) {
+e.stopPropagation();
+var feed = e.target.lastResponse.feed;
+var key = generateCacheKey_.call(this);
+if (!(key in rowDataCache_)) {
+rowDataCache_[key] = { response: { feed: feed } };
+}
+this._setRows(feed.entry);
+var authors = feed.author && feed.author.map(function (a) {
+return {
+email: a.email.$t,
+name: a.name.$t
+};
+});
+this.set('rows.authors', authors);
+if (this.published) {
+this._setTab(feed);
+}
+this.fire('google-sheet-data', {
+type: 'rows',
+data: this.rows
+});
+}
+});
+}());
+Polymer.IronControlState = {
+properties: {
+focused: {
+type: Boolean,
+value: false,
+notify: true,
+readOnly: true,
+reflectToAttribute: true
+},
+disabled: {
+type: Boolean,
+value: false,
+notify: true,
+observer: '_disabledChanged',
+reflectToAttribute: true
+},
+_oldTabIndex: { type: Number },
+_boundFocusBlurHandler: {
+type: Function,
+value: function () {
+return this._focusBlurHandler.bind(this);
+}
+}
+},
+observers: ['_changedControlState(focused, disabled)'],
+ready: function () {
+this.addEventListener('focus', this._boundFocusBlurHandler, true);
+this.addEventListener('blur', this._boundFocusBlurHandler, true);
+},
+_focusBlurHandler: function (event) {
+if (event.target === this) {
+this._setFocused(event.type === 'focus');
+} else if (!this.shadowRoot && !this.isLightDescendant(event.target)) {
+this.fire(event.type, { sourceEvent: event }, {
+node: this,
+bubbles: event.bubbles,
+cancelable: event.cancelable
+});
+}
+},
+_disabledChanged: function (disabled, old) {
+this.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+this.style.pointerEvents = disabled ? 'none' : '';
+if (disabled) {
+this._oldTabIndex = this.tabIndex;
+this.focused = false;
+this.tabIndex = -1;
+} else if (this._oldTabIndex !== undefined) {
+this.tabIndex = this._oldTabIndex;
+}
+},
+_changedControlState: function () {
+if (this._controlStateChanged) {
+this._controlStateChanged();
+}
+}
+};
+Polymer.IronButtonStateImpl = {
+properties: {
+pressed: {
+type: Boolean,
+readOnly: true,
+value: false,
+reflectToAttribute: true,
+observer: '_pressedChanged'
+},
+toggles: {
+type: Boolean,
+value: false,
+reflectToAttribute: true
+},
+active: {
+type: Boolean,
+value: false,
+notify: true,
+reflectToAttribute: true
+},
+pointerDown: {
+type: Boolean,
+readOnly: true,
+value: false
+},
+receivedFocusFromKeyboard: {
+type: Boolean,
+readOnly: true
+},
+ariaActiveAttribute: {
+type: String,
+value: 'aria-pressed',
+observer: '_ariaActiveAttributeChanged'
+}
+},
+listeners: {
+down: '_downHandler',
+up: '_upHandler',
+tap: '_tapHandler'
+},
+observers: [
+'_detectKeyboardFocus(focused)',
+'_activeChanged(active, ariaActiveAttribute)'
+],
+keyBindings: {
+'enter:keydown': '_asyncClick',
+'space:keydown': '_spaceKeyDownHandler',
+'space:keyup': '_spaceKeyUpHandler'
+},
+_mouseEventRe: /^mouse/,
+_tapHandler: function () {
+if (this.toggles) {
+this._userActivate(!this.active);
+} else {
+this.active = false;
+}
+},
+_detectKeyboardFocus: function (focused) {
+this._setReceivedFocusFromKeyboard(!this.pointerDown && focused);
+},
+_userActivate: function (active) {
+if (this.active !== active) {
+this.active = active;
+this.fire('change');
+}
+},
+_downHandler: function (event) {
+this._setPointerDown(true);
+this._setPressed(true);
+this._setReceivedFocusFromKeyboard(false);
+},
+_upHandler: function () {
+this._setPointerDown(false);
+this._setPressed(false);
+},
+_spaceKeyDownHandler: function (event) {
+var keyboardEvent = event.detail.keyboardEvent;
+var target = Polymer.dom(keyboardEvent).localTarget;
+if (this.isLightDescendant(target))
+return;
+keyboardEvent.preventDefault();
+keyboardEvent.stopImmediatePropagation();
+this._setPressed(true);
+},
+_spaceKeyUpHandler: function (event) {
+var keyboardEvent = event.detail.keyboardEvent;
+var target = Polymer.dom(keyboardEvent).localTarget;
+if (this.isLightDescendant(target))
+return;
+if (this.pressed) {
+this._asyncClick();
+}
+this._setPressed(false);
+},
+_asyncClick: function () {
+this.async(function () {
+this.click();
+}, 1);
+},
+_pressedChanged: function (pressed) {
+this._changedButtonState();
+},
+_ariaActiveAttributeChanged: function (value, oldValue) {
+if (oldValue && oldValue != value && this.hasAttribute(oldValue)) {
+this.removeAttribute(oldValue);
+}
+},
+_activeChanged: function (active, ariaActiveAttribute) {
+if (this.toggles) {
+this.setAttribute(this.ariaActiveAttribute, active ? 'true' : 'false');
+} else {
+this.removeAttribute(this.ariaActiveAttribute);
+}
+this._changedButtonState();
+},
+_controlStateChanged: function () {
+if (this.disabled) {
+this._setPressed(false);
+} else {
+this._changedButtonState();
+}
+},
+_changedButtonState: function () {
+if (this._buttonStateChanged) {
+this._buttonStateChanged();
+}
+}
+};
+Polymer.IronButtonState = [
+Polymer.IronA11yKeysBehavior,
+Polymer.IronButtonStateImpl
+];
+Polymer.PaperRippleBehavior = {
+properties: {
+noink: {
+type: Boolean,
+observer: '_noinkChanged'
+},
+_rippleContainer: { type: Object }
+},
+_buttonStateChanged: function () {
+if (this.focused) {
+this.ensureRipple();
+}
+},
+_downHandler: function (event) {
+Polymer.IronButtonStateImpl._downHandler.call(this, event);
+if (this.pressed) {
+this.ensureRipple(event);
+}
+},
+ensureRipple: function (optTriggeringEvent) {
+if (!this.hasRipple()) {
+this._ripple = this._createRipple();
+this._ripple.noink = this.noink;
+var rippleContainer = this._rippleContainer || this.root;
+if (rippleContainer) {
+Polymer.dom(rippleContainer).appendChild(this._ripple);
+}
+if (optTriggeringEvent) {
+var domContainer = Polymer.dom(this._rippleContainer || this);
+var target = Polymer.dom(optTriggeringEvent).rootTarget;
+if (domContainer.deepContains(target)) {
+this._ripple.uiDownAction(optTriggeringEvent);
+}
+}
+}
+},
+getRipple: function () {
+this.ensureRipple();
+return this._ripple;
+},
+hasRipple: function () {
+return Boolean(this._ripple);
+},
+_createRipple: function () {
+return document.createElement('paper-ripple');
+},
+_noinkChanged: function (noink) {
+if (this.hasRipple()) {
+this._ripple.noink = noink;
+}
+}
+};
+Polymer.PaperButtonBehaviorImpl = {
+properties: {
+elevation: {
+type: Number,
+reflectToAttribute: true,
+readOnly: true
+}
+},
+observers: [
+'_calculateElevation(focused, disabled, active, pressed, receivedFocusFromKeyboard)',
+'_computeKeyboardClass(receivedFocusFromKeyboard)'
+],
+hostAttributes: {
+role: 'button',
+tabindex: '0',
+animated: true
+},
+_calculateElevation: function () {
+var e = 1;
+if (this.disabled) {
+e = 0;
+} else if (this.active || this.pressed) {
+e = 4;
+} else if (this.receivedFocusFromKeyboard) {
+e = 3;
+}
+this._setElevation(e);
+},
+_computeKeyboardClass: function (receivedFocusFromKeyboard) {
+this.toggleClass('keyboard-focus', receivedFocusFromKeyboard);
+},
+_spaceKeyDownHandler: function (event) {
+Polymer.IronButtonStateImpl._spaceKeyDownHandler.call(this, event);
+if (this.hasRipple() && this.getRipple().ripples.length < 1) {
+this._ripple.uiDownAction();
+}
+},
+_spaceKeyUpHandler: function (event) {
+Polymer.IronButtonStateImpl._spaceKeyUpHandler.call(this, event);
+if (this.hasRipple()) {
+this._ripple.uiUpAction();
+}
+}
+};
+Polymer.PaperButtonBehavior = [
+Polymer.IronButtonState,
+Polymer.IronControlState,
+Polymer.PaperRippleBehavior,
+Polymer.PaperButtonBehaviorImpl
+];
+Polymer({
+is: 'paper-button',
+behaviors: [Polymer.PaperButtonBehavior],
+properties: {
+raised: {
+type: Boolean,
+reflectToAttribute: true,
+value: false,
+observer: '_calculateElevation'
+}
+},
+_calculateElevation: function () {
+if (!this.raised) {
+this._setElevation(0);
+} else {
+Polymer.PaperButtonBehaviorImpl._calculateElevation.apply(this);
+}
+}
+});
+Polymer.IronValidatableBehavior = {
+properties: {
+validatorType: {
+type: String,
+value: 'validator'
+},
+validator: { type: String },
+invalid: {
+notify: true,
+reflectToAttribute: true,
+type: Boolean,
+value: false
+},
+_validatorMeta: { type: Object }
+},
+observers: ['_invalidChanged(invalid)'],
+get _validator() {
+return this._validatorMeta && this._validatorMeta.byKey(this.validator);
+},
+ready: function () {
+this._validatorMeta = new Polymer.IronMeta({ type: this.validatorType });
+},
+_invalidChanged: function () {
+if (this.invalid) {
+this.setAttribute('aria-invalid', 'true');
+} else {
+this.removeAttribute('aria-invalid');
+}
+},
+hasValidator: function () {
+return this._validator != null;
+},
+validate: function (value) {
+this.invalid = !this._getValidity(value);
+return !this.invalid;
+},
+_getValidity: function (value) {
+if (this.hasValidator()) {
+return this._validator.validate(value);
+}
+return true;
+}
+};
+Polymer.IronFormElementBehavior = {
+properties: {
+name: { type: String },
+value: {
+notify: true,
+type: String
+},
+required: {
+type: Boolean,
+value: false
+},
+_parentForm: { type: Object }
+},
+attached: function () {
+this.fire('iron-form-element-register');
+},
+detached: function () {
+if (this._parentForm) {
+this._parentForm.fire('iron-form-element-unregister', { target: this });
+}
+}
+};
+Polymer.IronCheckedElementBehaviorImpl = {
+properties: {
+checked: {
+type: Boolean,
+value: false,
+reflectToAttribute: true,
+notify: true,
+observer: '_checkedChanged'
+},
+toggles: {
+type: Boolean,
+value: true,
+reflectToAttribute: true
+},
+value: {
+type: String,
+value: 'on',
+observer: '_valueChanged'
+}
+},
+observers: ['_requiredChanged(required)'],
+created: function () {
+this._hasIronCheckedElementBehavior = true;
+},
+_getValidity: function (_value) {
+return this.disabled || !this.required || this.checked;
+},
+_requiredChanged: function () {
+if (this.required) {
+this.setAttribute('aria-required', 'true');
+} else {
+this.removeAttribute('aria-required');
+}
+},
+_checkedChanged: function () {
+this.active = this.checked;
+this.fire('iron-change');
+},
+_valueChanged: function () {
+if (this.value === undefined || this.value === null) {
+this.value = 'on';
+}
+}
+};
+Polymer.IronCheckedElementBehavior = [
+Polymer.IronFormElementBehavior,
+Polymer.IronValidatableBehavior,
+Polymer.IronCheckedElementBehaviorImpl
+];
+Polymer.PaperInkyFocusBehaviorImpl = {
+observers: ['_focusedChanged(receivedFocusFromKeyboard)'],
+_focusedChanged: function (receivedFocusFromKeyboard) {
+if (receivedFocusFromKeyboard) {
+this.ensureRipple();
+}
+if (this.hasRipple()) {
+this._ripple.holdDown = receivedFocusFromKeyboard;
+}
+},
+_createRipple: function () {
+var ripple = Polymer.PaperRippleBehavior._createRipple();
+ripple.id = 'ink';
+ripple.setAttribute('center', '');
+ripple.classList.add('circle');
+return ripple;
+}
+};
+Polymer.PaperInkyFocusBehavior = [
+Polymer.IronButtonState,
+Polymer.IronControlState,
+Polymer.PaperRippleBehavior,
+Polymer.PaperInkyFocusBehaviorImpl
+];
+Polymer.PaperCheckedElementBehaviorImpl = {
+_checkedChanged: function () {
+Polymer.IronCheckedElementBehaviorImpl._checkedChanged.call(this);
+if (this.hasRipple()) {
+if (this.checked) {
+this._ripple.setAttribute('checked', '');
+} else {
+this._ripple.removeAttribute('checked');
+}
+}
+},
+_buttonStateChanged: function () {
+Polymer.PaperRippleBehavior._buttonStateChanged.call(this);
+if (this.disabled) {
+return;
+}
+if (this.isAttached) {
+this.checked = this.active;
+}
+}
+};
+Polymer.PaperCheckedElementBehavior = [
+Polymer.PaperInkyFocusBehavior,
+Polymer.IronCheckedElementBehavior,
+Polymer.PaperCheckedElementBehaviorImpl
+];
+Polymer({
+is: 'paper-checkbox',
+behaviors: [Polymer.PaperCheckedElementBehavior],
+hostAttributes: {
+role: 'checkbox',
+'aria-checked': false,
+tabindex: 0
+},
+properties: {
+ariaActiveAttribute: {
+type: String,
+value: 'aria-checked'
+}
+},
+_computeCheckboxClass: function (checked, invalid) {
+var className = '';
+if (checked) {
+className += 'checked ';
+}
+if (invalid) {
+className += 'invalid';
+}
+return className;
+},
+_computeCheckmarkClass: function (checked) {
+return checked ? '' : 'hidden';
+},
+_createRipple: function () {
+this._rippleContainer = this.$.checkboxContainer;
+return Polymer.PaperInkyFocusBehaviorImpl._createRipple.call(this);
+}
+});
+Polymer({
+is: 'paper-toggle-button',
+behaviors: [Polymer.PaperCheckedElementBehavior],
+hostAttributes: {
+role: 'button',
+'aria-pressed': 'false',
+tabindex: 0
+},
+properties: {},
+listeners: { track: '_ontrack' },
+_ontrack: function (event) {
+var track = event.detail;
+if (track.state === 'start') {
+this._trackStart(track);
+} else if (track.state === 'track') {
+this._trackMove(track);
+} else if (track.state === 'end') {
+this._trackEnd(track);
+}
+},
+_trackStart: function (track) {
+this._width = this.$.toggleBar.offsetWidth / 2;
+this._trackChecked = this.checked;
+this.$.toggleButton.classList.add('dragging');
+},
+_trackMove: function (track) {
+var dx = track.dx;
+this._x = Math.min(this._width, Math.max(0, this._trackChecked ? this._width + dx : dx));
+this.translate3d(this._x + 'px', 0, 0, this.$.toggleButton);
+this._userActivate(this._x > this._width / 2);
+},
+_trackEnd: function (track) {
+this.$.toggleButton.classList.remove('dragging');
+this.transform('', this.$.toggleButton);
+},
+_createRipple: function () {
+this._rippleContainer = this.$.toggleButton;
+var ripple = Polymer.PaperRippleBehavior._createRipple();
+ripple.id = 'ink';
+ripple.setAttribute('recenters', '');
+ripple.classList.add('circle', 'toggle-ink');
+return ripple;
+}
+});
+Polymer({
+is: 'paper-toolbar',
+hostAttributes: { 'role': 'toolbar' },
+properties: {
+bottomJustify: {
+type: String,
+value: ''
+},
+justify: {
+type: String,
+value: ''
+},
+middleJustify: {
+type: String,
+value: ''
+}
+},
+attached: function () {
+this._observer = this._observe(this);
+this._updateAriaLabelledBy();
+},
+detached: function () {
+if (this._observer) {
+this._observer.disconnect();
+}
+},
+_observe: function (node) {
+var observer = new MutationObserver(function () {
+this._updateAriaLabelledBy();
+}.bind(this));
+observer.observe(node, {
+childList: true,
+subtree: true
+});
+return observer;
+},
+_updateAriaLabelledBy: function () {
+var labelledBy = [];
+var contents = Polymer.dom(this.root).querySelectorAll('content');
+for (var content, index = 0; content = contents[index]; index++) {
+var nodes = Polymer.dom(content).getDistributedNodes();
+for (var node, jndex = 0; node = nodes[jndex]; jndex++) {
+if (node.classList && node.classList.contains('title')) {
+if (node.id) {
+labelledBy.push(node.id);
+} else {
+var id = 'paper-toolbar-label-' + Math.floor(Math.random() * 10000);
+node.id = id;
+labelledBy.push(id);
+}
+}
+}
+}
+if (labelledBy.length > 0) {
+this.setAttribute('aria-labelledby', labelledBy.join(' '));
+}
+},
+_computeBarExtraClasses: function (barJustify) {
+if (!barJustify)
+return '';
+return barJustify + (barJustify === 'justified' ? '' : '-justified');
+}
+});
 Polymer({
 is: 'pd-app',
 properties: {
@@ -19803,11 +19898,19 @@ value: false,
 observer: '_autoRefreshChanged'
 },
 autoRefreshInterval: { value: 60 * 1000 * 10 },
-nextRefreshStatus: { value: 'Auto refresh off' }
+nextRefreshStatus: { value: 'Auto refresh off' },
+githubUser: {
+value: false,
+type: Boolean
+},
+googleUser: {
+value: false,
+type: Boolean
+}
 },
 observers: ['_refresh(_leads, githubUser)'],
-githubStatus: function (user) {
-return user ? 'Logout' : 'Login';
+loginStatus: function (user) {
+return user ? 'Sign Out' : 'Sign In';
 },
 bool: function (b) {
 return Boolean(b);
@@ -19817,6 +19920,13 @@ if (this.githubUser) {
 this.$.githubAuth.logout();
 } else {
 this.$.githubAuth.login();
+}
+},
+toggleGoogleLogin: function () {
+if (this.googleUser) {
+this.$.googleAuth.signOut();
+} else {
+this.$.googleAuth.signIn();
 }
 },
 refresh: function () {
@@ -19980,42 +20090,6 @@ name
 _toggleDetails: function (e) {
 e.model.set('item.detailsOpen', !e.model.item.detailsOpen);
 },
-_toggleAllDetails: function (toggleMaintainers) {
-var open = toggleMaintainers ? !this.all.leads[0].detailsOpen || !this.all.leads[0].maintainers[0].detailsOpen : !this.all.leads[0].detailsOpen;
-for (var i = 0; i < this.all.leads.length; i++) {
-var lead = this.all.leads[i];
-if (toggleMaintainers) {
-for (var j = 0; j < lead.maintainers.length; j++) {
-this.set([
-'all.leads',
-i,
-'maintainers',
-j,
-'detailsOpen'
-], open);
-}
-if (open) {
-this.set([
-'all.leads',
-i,
-'detailsOpen'
-], open);
-}
-} else {
-this.set([
-'all.leads',
-i,
-'detailsOpen'
-], open);
-}
-}
-},
-_toggleLeads: function () {
-this._toggleAllDetails(false);
-},
-_toggleMaintainers: function () {
-this._toggleAllDetails(true);
-},
 _handleUntriagedError: function (xhr) {
 this.status = 'Error: ' + xhr.status;
 this.shift('_requestQueue');
@@ -20036,5 +20110,32 @@ if (this.autoRefresh) {
 this._refreshId = setTimeout(this.refresh.bind(this), this.autoRefreshInterval);
 this.nextRefreshStatus = 'Next refresh at ' + new Date(Date.now() + this.autoRefreshInterval).toLocaleTimeString();
 }
+},
+_toggleTeams: function () {
+for (var i = 0; i < this.all.leads.length; i++) {
+var lead = this.all.leads[i];
+this.set([
+'all.leads',
+i,
+'detailsOpen'
+], this.$.teamsOn.checked);
+}
+},
+_toggleRepos: function () {
+for (var i = 0; i < this.all.leads.length; i++) {
+var lead = this.all.leads[i];
+for (var j = 0; j < lead.maintainers.length; j++) {
+this.set([
+'all.leads',
+i,
+'maintainers',
+j,
+'detailsOpen'
+], this.$.reposOn.checked);
+}
+}
+},
+_shouldShowResults: function (googleUser, githubUser) {
+return googleUser && githubUser;
 }
 });
