@@ -64,7 +64,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       .p1 { color: var(--paper-orange-500) !important; }
       .p2 { color: var(--paper-indigo-500) !important; }
       .pr { color: var(--paper-green-500) !important; }
-      
+
       .tldr {
         text-align: center;
         margin: 0 20px;
@@ -490,7 +490,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           }
         }
       },
-      _shouldShowResults(googleUser, githubUser) {
+      _shouldShowResults: function(googleUser, githubUser) {
         return googleUser && githubUser;
       }
     });
