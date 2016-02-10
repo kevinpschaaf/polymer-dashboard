@@ -11,12 +11,14 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <link rel="import" href="../bower_components/polymer/polymer.html">
 
 <link rel="import" href="../bower_components/iron-flex-layout/iron-flex-layout.html">
+<link rel="import" href="../bower_components/iron-collapse/iron-collapse.html">
+<link rel="import" href="../bower_components/firebase-element/firebase-auth.html">
 <link rel="import" href="../bower_components/google-signin/google-signin.html">
 <link rel="import" href="../bower_components/google-sheets/google-sheets.html">
-<link rel="import" href="../bower_components/iron-collapse/iron-collapse.html">
 <link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-styles/color.html">
 <link rel="import" href="../bower_components/paper-toggle-button/paper-toggle-button.html">
-<link rel="import" href="../bower_components/firebase-element/firebase-auth.html">
+<link rel="import" href="../bower_components/paper-toolbar/paper-toolbar.html">
 
 <dom-module id="pd-app">
 
@@ -25,12 +27,18 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <style>
       :host {
         display: block;
+        background: white;
       }
       .horizontal {
         @apply(--layout-horizontal);
         @apply(--layout-center);
       }
-      h3, .status {
+
+      paper-toolbar {
+        background-color: var(--paper-blue-grey-700);
+      }
+
+      .status {
         padding: 5px;
       }
       .row {
@@ -71,6 +79,10 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       .count {
         width: 80px;
       }
+
+      #githubButton {
+        padding: 8px;
+      }
       .github-icon {
         height: 16px;
         width: 16px;
@@ -78,16 +90,20 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         display: inline-block;
         background-image: url("../resources/github.png"); background-size: 100%; background-position: 50% 50%;
       }
+      paper-toggle-button {
+        --paper-toggle-button-label-color: white;
+        font-size: 14px;
+        margin-right: 15px;
+      }
     </style>
 
-    <h3>Polymer Issues Dashboard</h3>
+    <paper-toolbar>
+      <span class="title">Polymer Elements Issues</span>
 
-    <google-sheets id="sheet"
-      client-id="{{clientId}}"
-      key="1m0SleaDfRTPzDvlnInip9x4FXT6O98M2W8jwZyHmNp8" tab-id="3" rows="{{rows}}">
-    </google-sheets>
-
-    <div class="horizontal">
+      <div id="actionButtons" class="horizontal">
+        <paper-toggle-button on-tap="_toggleLeads">Toggle leads</paper-toggle-button>
+        <paper-toggle-button on-tap="_toggleMaintainers">Toggle maintainers</paper-toggle-button>
+      </div>
 
       <google-signin
         client-id="{{clientId}}"
@@ -99,17 +115,19 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         user="{{githubUser}}">
       </firebase-auth>
 
-      <paper-button raised id="githubButton" on-tap="toggleGithubLogin"><div class="github-icon"></div>{{githubStatus(githubUser)}}</paper-button>
-
-      <paper-button raised on-tap="_toggleLeads">Toggle leads</paper-button>
-      <paper-button raised on-tap="_toggleMaintainers">Toggle maintainers</paper-button>
-
+      <paper-button raised id="githubButton" on-tap="toggleGithubLogin">
+        <div class="github-icon"></div>{{githubStatus(githubUser)}}
+      </paper-button>
+    </paper-toolbar>
       <!-- <paper-button raised on-tap="refresh" disabled="{{bool(_requestQueue.length)}}">Refresh</paper-button> -->
 
       <!-- <paper-toggle-button checked="{{autoRefresh}}"></paper-toggle-button>
       <div>{{nextRefreshStatus}}</div> -->
 
-    </div>
+    <google-sheets id="sheet"
+      client-id="{{clientId}}"
+      key="1m0SleaDfRTPzDvlnInip9x4FXT6O98M2W8jwZyHmNp8" tab-id="3" rows="{{rows}}">
+    </google-sheets>
 
     <div class="status">Status: {{status}}</div>
 
@@ -158,7 +176,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
                 <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p0+-+critical%22">{{item.p0.length}}</a></div>
                 <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p1+-+backlog%22">{{item.p1.length}}</a></div>
                 <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p2+-+icebox%22">{{item.p2.length}}</a></div>
-                <div class="count"><a target="_blank" href="https://github.com/polymerelements/iron-overlay-behavior/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen">{{item.prs.length}}</a></div>
+                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen">{{item.prs.length}}</a></div>
                 <div class="count"><a target="_blank" href="https://travis-ci.org/PolymerElements/{{item.name}}"><img src="https://travis-ci.org/PolymerElements/{{item.name}}.svg?branch=master"></a></div>
               </div>
             </template>
