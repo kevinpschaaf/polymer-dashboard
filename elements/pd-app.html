@@ -11,12 +11,15 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <link rel="import" href="../bower_components/polymer/polymer.html">
 
 <link rel="import" href="../bower_components/iron-flex-layout/iron-flex-layout.html">
+<link rel="import" href="../bower_components/iron-collapse/iron-collapse.html">
+<link rel="import" href="../bower_components/firebase-element/firebase-auth.html">
 <link rel="import" href="../bower_components/google-signin/google-signin.html">
 <link rel="import" href="../bower_components/google-sheets/google-sheets.html">
-<link rel="import" href="../bower_components/iron-collapse/iron-collapse.html">
 <link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-checkbox/paper-checkbox.html">
+<link rel="import" href="../bower_components/paper-styles/color.html">
 <link rel="import" href="../bower_components/paper-toggle-button/paper-toggle-button.html">
-<link rel="import" href="../bower_components/firebase-element/firebase-auth.html">
+<link rel="import" href="../bower_components/paper-toolbar/paper-toolbar.html">
 
 <dom-module id="pd-app">
 
@@ -25,34 +28,83 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <style>
       :host {
         display: block;
+        background: white;
       }
       .horizontal {
         @apply(--layout-horizontal);
         @apply(--layout-center);
       }
-      h3, .status {
-        padding: 5px;
+      .justified {
+        @apply(--layout-justified);
+      }
+      paper-toolbar {
+        background-color: var(--paper-blue-grey-50);
+        color: var(--paper-blue-grey-700);
+        --paper-toolbar-title: {
+          margin: 20px;
+        }
+      }
+      a:link, a:visited {
+        text-decoration: none;
+        color: var(--google-blue-700);
+      }
+      .needs-signin {
+        width: 500px;
+        text-align: center;
+        margin: 150px auto;
+      }
+      .results {
+        max-width: 1000px;
+        margin: 40px auto;
+      }
+      .status {
+        text-align: center;
+      }
+      .p0 { color: var(--paper-pink-500) !important; }
+      .p1 { color: var(--paper-orange-500) !important; }
+      .p2 { color: var(--paper-indigo-500) !important; }
+      .pr { color: var(--paper-green-500) !important; }
+
+      .tldr {
+        text-align: center;
+        margin: 0 20px;
+      }
+      .tldr .value {
+        font-size: 60px;
+        line-height: 1;
+        font-weight: 700;
+      }
+      .tldr .title {
+        font-size: 15px;
+        font-weight: 300;
+        text-transform: uppercase;
       }
       .row {
         @apply(--layout-horizontal);
-        border-bottom: 1px solid #ccc;
+        font-size: 16px;
+        padding: .3rem 0;
       }
-      .header {
-        background: #ccc;
+      .row.repo {
+        border: 1px solid #EFF0EC;
       }
       .row > * {
         padding: 5px;
         box-sizing: border-box;
       }
       .row.all {
-        background: pink;
+        background: var(--paper-pink-500);
+        color: white;
         font-weight: bold;
       }
       .row.lead {
-        background: lightgreen;
+        background: var(--paper-blue-grey-50);
+        cursor: pointer;
+        font-weight: bold;
       }
       .row.maintainer {
-        background: lightyellow;
+        background: var(--paper-blue-grey-100);
+        cursor: pointer;
+        font-weight: bold;
       }
       .name {
         width: 300px;
@@ -64,6 +116,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
       .maintainer .name {
         padding-left: 40px;
+        font-weight: normal;
       }
       .repo .name {
         padding-left: 50px;
@@ -71,101 +124,138 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       .count {
         width: 80px;
       }
-      .github-icon {
-        height: 16px;
-        width: 16px;
-        margin-right: 8px;
-        display: inline-block;
-        background-image: url("../resources/github.png"); background-size: 100%; background-position: 50% 50%;
+      paper-checkbox {
+        --paper-checkbox-label-color: var(--paper-blue-grey-700);
+        font-size: 14px;
+        margin-right: 15px;
+      }
+
+      paper-button {
+        text-transform: none;
       }
     </style>
 
-    <h3>Polymer Issues Dashboard</h3>
+    <paper-toolbar>
+      <span class="title">Polymer Elements Issues</span>
+
+      <div class="horizontal" hidden$="[[!_shouldShowResults(googleUser,githubUser)]]">
+        <paper-checkbox on-tap="_toggleTeams" id="teamsOn" checked>Expand teams</paper-checkbox>
+        <paper-checkbox on-tap="_toggleRepos" id="reposOn" checked>Expand repos</paper-checkbox>
+      </div>
+
+      <paper-button id="googleButton" on-tap="toggleGoogleLogin" raised>
+        Google {{loginStatus(googleUser)}}
+      </paper-button>
+
+      <paper-button id="githubButton" on-tap="toggleGithubLogin" raised>
+        GitHub {{loginStatus(githubUser)}}
+      </paper-button>
+    </paper-toolbar>
+
+    <!-- <paper-button raised on-tap="refresh" disabled="{{bool(_requestQueue.length)}}">Refresh</paper-button> -->
+
+    <!-- <paper-toggle-button checked="{{autoRefresh}}"></paper-toggle-button>
+    <div>{{nextRefreshStatus}}</div> -->
+
+    <div class="needs-signin" hidden$="[[_shouldShowResults(googleUser,githubUser)]]">
+      <h1><span style="font-weight:normal;">🙀</span> You're not signed in!</h1>
+      <p>You need to be signed in to both Google and GitHub for this to work.</p>
+    </div>
+
+    <div class="results" hidden$="[[!_shouldShowResults(googleUser,githubUser)]]">
+      <div class="horizontal justified">
+        <div class="tldr">
+          <div class="value">{{all.untriaged.length}}</div>
+          <div class="title">untriaged</div>
+        </div>
+        <div class="tldr">
+          <div class="value p0">{{all.p0.length}}</div>
+          <div class="title">P0 issues</div>
+        </div>
+        <div class="tldr">
+          <div class="value p1">{{all.p1.length}}</div>
+          <div class="title">P1 issues</div>
+        </div>
+        <div class="tldr">
+          <div class="value p2">{{all.p2.length}}</div>
+          <div class="title">P2 issues</div>
+        </div>
+        <div class="tldr">
+          <div class="value pr">{{all.prs.length}}</div>
+          <div class="title">Open PRs</div>
+        </div>
+      </div>
+      <br>
+
+      <div class="status">Status: {{status}}</div>
+      <br>
+
+      <div class="list">
+        <div class="row header">
+          <div class="name"></div>
+          <div class="count">Untriaged</div>
+          <div class="count">P0</div>
+          <div class="count">P1</div>
+          <div class="count">P2</div>
+          <div class="count">PR's</div>
+          <div class="count"></div>
+        </div>
+
+        <template is="dom-repeat" items="{{all.leads}}">
+          <div class="row lead" on-tap="_toggleDetails">
+            <div class="name">{{item.name}}</div>
+            <div class="count">{{item.untriaged.length}}</div>
+            <div class="count p0">{{item.p0.length}}</div>
+            <div class="count p1">{{item.p1.length}}</div>
+            <div class="count p2">{{item.p2.length}}</div>
+            <div class="count pr">{{item.prs.length}}</div>
+          </div>
+          <iron-collapse opened="{{item.detailsOpen}}">
+            <template is="dom-repeat" items="{{item.maintainers}}">
+              <div class="row maintainer" on-tap="_toggleDetails">
+                <div class="name">{{item.name}}</div>
+                <div class="count">{{item.untriaged.length}}</div>
+                <div class="count p0">{{item.p0.length}}</div>
+                <div class="count p1">{{item.p1.length}}</div>
+                <div class="count p2">{{item.p2.length}}</div>
+                <div class="count p3">{{item.prs.length}}</div>
+              </div>
+              <iron-collapse opened="{{item.detailsOpen}}">
+                <template is="dom-repeat" items="{{item.repos}}">
+                  <div class="row repo" on-tap="_toggleDetails">
+                    <div class="name "><a target="_blank" href="https://github.com/polymerelements/{{item.name}}">{{item.name}}</a></div>
+                    <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+-label%3A%22p0+-+critical%22++-label%3A%22p1+-+backlog%22++-label%3A%22p2+-+icebox%22+">
+                      {{item.untriaged.length}}</a></div>
+                    <div class="count"><a class="p0" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p0+-+critical%22">{{item.p0.length}}</a></div>
+                    <div class="count"><a class="p1" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p1+-+backlog%22">{{item.p1.length}}</a></div>
+                    <div class="count"><a class="p2" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p2+-+icebox%22">{{item.p2.length}}</a></div>
+                    <div class="count"><a class="pr" target="_blank" href="https://github.com/polymerelements/{{item.name}}/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen">{{item.prs.length}}</a></div>
+                    <div class="count"><a target="_blank" href="https://travis-ci.org/PolymerElements/{{item.name}}"><img src="https://travis-ci.org/PolymerElements/{{item.name}}.svg?branch=master"></a></div>
+                  </div>
+                </template>
+              </iron-collapse>
+            </template>
+          </iron-collapse>
+        </template>
+      </div>
+    </div>
 
     <google-sheets id="sheet"
       client-id="{{clientId}}"
       key="1m0SleaDfRTPzDvlnInip9x4FXT6O98M2W8jwZyHmNp8" tab-id="3" rows="{{rows}}">
     </google-sheets>
 
-    <div class="horizontal">
+    <google-signin-aware
+      client-id="{{clientId}}"
+      scopes="https://spreadsheets.google.com/feeds"
+      id="googleAuth"
+      is-authorized="{{googleUser}}">
+    </google-signin-aware>
 
-      <google-signin
-        client-id="{{clientId}}"
-        scopes="https://spreadsheets.google.com/feeds">
-      </google-signin>
-
-      <firebase-auth provider="github" id="githubAuth"
-        location="https://polymer-demos.firebaseio.com"
-        user="{{githubUser}}">
-      </firebase-auth>
-
-      <paper-button raised id="githubButton" on-tap="toggleGithubLogin"><div class="github-icon"></div>{{githubStatus(githubUser)}}</paper-button>
-
-      <paper-button raised on-tap="_toggleLeads">Toggle leads</paper-button>
-      <paper-button raised on-tap="_toggleMaintainers">Toggle maintainers</paper-button>
-
-      <!-- <paper-button raised on-tap="refresh" disabled="{{bool(_requestQueue.length)}}">Refresh</paper-button> -->
-
-      <!-- <paper-toggle-button checked="{{autoRefresh}}"></paper-toggle-button>
-      <div>{{nextRefreshStatus}}</div> -->
-
-    </div>
-
-    <div class="status">Status: {{status}}</div>
-
-    <div class="row header">
-      <div class="name"></div>
-      <div class="count">Untriaged</div>
-      <div class="count">P0</div>
-      <div class="count">P1</div>
-      <div class="count">P2</div>
-      <div class="count">PR's</div>
-      <div class="count">Status</div>
-    </div>
-    <div class="row all">
-      <div class="name">All</div>
-      <div class="count">{{all.untriaged.length}}</div>
-      <div class="count">{{all.p0.length}}</div>
-      <div class="count">{{all.p1.length}}</div>
-      <div class="count">{{all.p2.length}}</div>
-      <div class="count">{{all.prs.length}}</div>
-    </div>
-    <template is="dom-repeat" items="{{all.leads}}">
-      <div class="row lead" on-tap="_toggleDetails">
-        <div class="name">{{item.name}}</div>
-        <div class="count">{{item.untriaged.length}}</div>
-        <div class="count">{{item.p0.length}}</div>
-        <div class="count">{{item.p1.length}}</div>
-        <div class="count">{{item.p2.length}}</div>
-        <div class="count">{{item.prs.length}}</div>
-      </div>
-      <iron-collapse opened="{{item.detailsOpen}}">
-        <template is="dom-repeat" items="{{item.maintainers}}">
-          <div class="row maintainer" on-tap="_toggleDetails">
-            <div class="name">{{item.name}}</div>
-            <div class="count">{{item.untriaged.length}}</div>
-            <div class="count">{{item.p0.length}}</div>
-            <div class="count">{{item.p1.length}}</div>
-            <div class="count">{{item.p2.length}}</div>
-            <div class="count">{{item.prs.length}}</div>
-          </div>
-          <iron-collapse opened="{{item.detailsOpen}}">
-            <template is="dom-repeat" items="{{item.repos}}">
-              <div class="row repo" on-tap="_toggleDetails">
-                <div class="name "><a target="_blank" href="https://github.com/polymerelements/{{item.name}}">{{item.name}}</a></div>
-                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+-label%3A%22p0+-+critical%22++-label%3A%22p1+-+backlog%22++-label%3A%22p2+-+icebox%22+">
-                  {{item.untriaged.length}}</a></div>
-                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p0+-+critical%22">{{item.p0.length}}</a></div>
-                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p1+-+backlog%22">{{item.p1.length}}</a></div>
-                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p2+-+icebox%22">{{item.p2.length}}</a></div>
-                <div class="count"><a target="_blank" href="https://github.com/polymerelements/iron-overlay-behavior/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen">{{item.prs.length}}</a></div>
-                <div class="count"><a target="_blank" href="https://travis-ci.org/PolymerElements/{{item.name}}"><img src="https://travis-ci.org/PolymerElements/{{item.name}}.svg?branch=master"></a></div>
-              </div>
-            </template>
-          </iron-collapse>
-        </template>
-      </iron-collapse>
-    </template>
+    <firebase-auth provider="github" id="githubAuth"
+      location="https://polymer-demos.firebaseio.com"
+      user="{{githubUser}}">
+    </firebase-auth>
 
   </template>
 
@@ -196,13 +286,25 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         },
         nextRefreshStatus: {
           value: 'Auto refresh off'
+        },
+        githubUser: {
+          value: false,
+          type: Boolean
+        },
+        googleUser: {
+          value: false,
+          type: Boolean
         }
       },
       observers: [
         '_refresh(_leads, githubUser)'
       ],
-      githubStatus: function(user) {
-        return user ? 'Logout' : 'Login';
+      // listeners: {
+      //   'google-signin-aware-success': '_onGoogleSignIn',
+      //   'google-signin-aware-signed-out': '_onGoogleSignOut'
+      // },
+      loginStatus: function(user) {
+        return user ? 'Sign Out' : 'Sign In';
       },
       bool: function(b) {
         return Boolean(b);
@@ -212,6 +314,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           this.$.githubAuth.logout();
         } else {
           this.$.githubAuth.login();
+        }
+      },
+      toggleGoogleLogin: function() {
+        if (this.googleUser) {
+          this.$.googleAuth.signOut();
+        } else {
+          this.$.googleAuth.signIn();
         }
       },
       refresh: function() {
@@ -341,31 +450,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       _toggleDetails: function(e) {
         e.model.set('item.detailsOpen', !e.model.item.detailsOpen);
       },
-      _toggleAllDetails: function(toggleMaintainers) {
-        var open = toggleMaintainers ?
-          !this.all.leads[0].detailsOpen ||
-          !this.all.leads[0].maintainers[0].detailsOpen :
-          !this.all.leads[0].detailsOpen;
-        for (var i=0; i<this.all.leads.length; i++) {
-          var lead = this.all.leads[i];
-          if (toggleMaintainers) {
-            for (var j=0; j<lead.maintainers.length; j++) {
-              this.set(['all.leads', i, 'maintainers', j, 'detailsOpen'], open);
-            }
-            if (open) {
-              this.set(['all.leads', i, 'detailsOpen'], open);
-            }
-          } else {
-            this.set(['all.leads', i, 'detailsOpen'], open);
-          }
-        }
-      },
-      _toggleLeads: function() {
-        this._toggleAllDetails(false);
-      },
-      _toggleMaintainers: function() {
-        this._toggleAllDetails(true);
-      },
       _handleUntriagedError: function(xhr) {
         this.status = 'Error: ' + xhr.status;
         this.shift('_requestQueue');
@@ -388,6 +472,26 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           this.nextRefreshStatus = 'Next refresh at ' +
             new Date(Date.now() + this.autoRefreshInterval).toLocaleTimeString();
         }
+      },
+      _toggleTeams: function() {
+        // For each lead, hide or show their details.
+        for (var i = 0; i < this.all.leads.length; i++) {
+          var lead = this.all.leads[i];
+          this.set(['all.leads', i, 'detailsOpen'], this.$.teamsOn.checked);
+        }
+      },
+      _toggleRepos: function() {
+        // For each maintainer, show or hide their repos.
+        for (var i = 0; i < this.all.leads.length; i++) {
+          var lead = this.all.leads[i];
+
+          for (var j=0; j<lead.maintainers.length; j++) {
+            this.set(['all.leads', i, 'maintainers', j, 'detailsOpen'], this.$.reposOn.checked);
+          }
+        }
+      },
+      _shouldShowResults: function(googleUser, githubUser) {
+        return googleUser && githubUser;
       }
     });
   </script>
