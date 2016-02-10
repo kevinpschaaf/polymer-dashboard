@@ -34,10 +34,14 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         @apply(--layout-horizontal);
         @apply(--layout-center);
       }
-
       paper-toolbar {
         background-color: var(--paper-blue-grey-50);
         color: var(--paper-blue-grey-700);
+      }
+      .needs-signin {
+        width: 500px;
+        text-align: center;
+        margin: 150px auto;
       }
 
       .status {
@@ -96,7 +100,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <paper-toolbar>
       <span class="title">Polymer Elements Issues</span>
 
-      <div id="actionButtons" class="horizontal" hidden$="[[!_shouldShowResults(googleUser,githubUser)]]">
+      <div class="horizontal" hidden$="[[!_shouldShowResults(googleUser,githubUser)]]">
         <paper-checkbox on-tap="_toggleTeams" id="teamsOn" checked>Expand teams</paper-checkbox>
         <paper-checkbox on-tap="_toggleRepos" id="reposOn" checked>Expand repos</paper-checkbox>
       </div>
@@ -115,8 +119,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <!-- <paper-toggle-button checked="{{autoRefresh}}"></paper-toggle-button>
     <div>{{nextRefreshStatus}}</div> -->
 
+    <div class="needs-signin" hidden$="[[_shouldShowResults(googleUser,githubUser)]]">
+      <h1><span style="font-weight:normal;">🙀</span> You're not signed in!</h1>
+      <p>You need to be signed in to both Google and GitHub for this to work.</p>
+    </div>
 
-    <div id="issueList" hidden$="[[!_shouldShowResults(googleUser,githubUser)]]">
+    <div hidden$="[[!_shouldShowResults(googleUser,githubUser)]]">
       <div class="status">Status: {{status}}</div>
 
       <div class="row header">
