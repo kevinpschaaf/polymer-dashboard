@@ -34,12 +34,19 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         @apply(--layout-horizontal);
         @apply(--layout-center);
       }
+      .justified {
+        @apply(--layout-justified);
+      }
       paper-toolbar {
         background-color: var(--paper-blue-grey-50);
         color: var(--paper-blue-grey-700);
         --paper-toolbar-title: {
           margin: 20px;
         }
+      }
+      a:link, a:visited {
+        text-decoration: none;
+        color: var(--google-blue-700);
       }
       .needs-signin {
         width: 500px;
@@ -49,20 +56,15 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       .results {
         max-width: 1000px;
         margin: 40px auto;
-        text-align: center;
       }
       .status {
-        padding: 5px;
+        text-align: center;
       }
-
-      .p0 { color: var(--paper-pink-500); }
-      .p1 { color: var(--paper-orange-500); }
-      .p2 { color: var(--paper-indigo-500); }
-      .p3 { color: var(--paper-light-green-500); }
-
-      .tldr-list {
-        @apply(--layout-justified);
-      }
+      .p0 { color: var(--paper-pink-500) !important; }
+      .p1 { color: var(--paper-orange-500) !important; }
+      .p2 { color: var(--paper-indigo-500) !important; }
+      .pr { color: var(--paper-green-500) !important; }
+      
       .tldr {
         text-align: center;
         margin: 0 20px;
@@ -79,13 +81,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
       .row {
         @apply(--layout-horizontal);
-        border: 1px solid #EFF0EC;
         font-size: 16px;
         padding: .3rem 0;
-
       }
-      .header {
-        background: #ccc;
+      .row.repo {
+        border: 1px solid #EFF0EC;
       }
       .row > * {
         padding: 5px;
@@ -97,10 +97,14 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         font-weight: bold;
       }
       .row.lead {
-        background: lightgreen;
+        background: var(--paper-blue-grey-50);
+        cursor: pointer;
+        font-weight: bold;
       }
       .row.maintainer {
-        background: lightyellow;
+        background: var(--paper-blue-grey-100);
+        cursor: pointer;
+        font-weight: bold;
       }
       .name {
         width: 300px;
@@ -112,6 +116,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
       .maintainer .name {
         padding-left: 40px;
+        font-weight: normal;
       }
       .repo .name {
         padding-left: 50px;
@@ -119,7 +124,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       .count {
         width: 80px;
       }
-
       paper-checkbox {
         --paper-checkbox-label-color: var(--paper-blue-grey-700);
         font-size: 14px;
@@ -159,7 +163,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     </div>
 
     <div class="results" hidden$="[[!_shouldShowResults(googleUser,githubUser)]]">
-      <div class="horizontal tldr-list">
+      <div class="horizontal justified">
         <div class="tldr">
           <div class="value">{{all.untriaged.length}}</div>
           <div class="title">untriaged</div>
@@ -181,9 +185,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           <div class="title">Open PRs</div>
         </div>
       </div>
-      <br><br>
+      <br>
 
       <div class="status">Status: {{status}}</div>
+      <br>
+
       <div class="list">
         <div class="row header">
           <div class="name"></div>
@@ -220,10 +226,10 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
                     <div class="name "><a target="_blank" href="https://github.com/polymerelements/{{item.name}}">{{item.name}}</a></div>
                     <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+-label%3A%22p0+-+critical%22++-label%3A%22p1+-+backlog%22++-label%3A%22p2+-+icebox%22+">
                       {{item.untriaged.length}}</a></div>
-                    <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p0+-+critical%22">{{item.p0.length}}</a></div>
-                    <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p1+-+backlog%22">{{item.p1.length}}</a></div>
-                    <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p2+-+icebox%22">{{item.p2.length}}</a></div>
-                    <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen">{{item.prs.length}}</a></div>
+                    <div class="count"><a class="p0" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p0+-+critical%22">{{item.p0.length}}</a></div>
+                    <div class="count"><a class="p1" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p1+-+backlog%22">{{item.p1.length}}</a></div>
+                    <div class="count"><a class="p2" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p2+-+icebox%22">{{item.p2.length}}</a></div>
+                    <div class="count"><a class="pr" target="_blank" href="https://github.com/polymerelements/{{item.name}}/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen">{{item.prs.length}}</a></div>
                     <div class="count"><a target="_blank" href="https://travis-ci.org/PolymerElements/{{item.name}}"><img src="https://travis-ci.org/PolymerElements/{{item.name}}.svg?branch=master"></a></div>
                   </div>
                 </template>
