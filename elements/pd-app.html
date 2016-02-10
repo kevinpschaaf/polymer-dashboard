@@ -35,7 +35,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
 
       paper-toolbar {
-        background-color: var(--paper-blue-grey-700);
+        background-color: var(--paper-blue-grey-50);
+        color: var(--paper-blue-grey-700);
       }
 
       .status {
@@ -80,110 +81,114 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         width: 80px;
       }
 
-      #githubButton {
-        padding: 8px;
-      }
-      .github-icon {
-        height: 16px;
-        width: 16px;
-        margin-right: 8px;
-        display: inline-block;
-        background-image: url("../resources/github.png"); background-size: 100%; background-position: 50% 50%;
-      }
       paper-toggle-button {
-        --paper-toggle-button-label-color: white;
+        --paper-toggle-button-label-color: var(--paper-blue-grey-700);
         font-size: 14px;
         margin-right: 15px;
+      }
+
+      paper-button {
+        text-transform: none;
       }
     </style>
 
     <paper-toolbar>
       <span class="title">Polymer Elements Issues</span>
 
-      <div id="actionButtons" class="horizontal">
+      <div id="actionButtons" class="horizontal" hidden$="[[!_shouldShowResults(googleUser,githubUser)]]">
         <paper-toggle-button on-tap="_toggleLeads">Toggle leads</paper-toggle-button>
         <paper-toggle-button on-tap="_toggleMaintainers">Toggle maintainers</paper-toggle-button>
       </div>
 
-      <google-signin
-        client-id="{{clientId}}"
-        scopes="https://spreadsheets.google.com/feeds">
-      </google-signin>
+      <paper-button id="googleButton" on-tap="toggleGoogleLogin" raised>
+        Google {{loginStatus(googleUser)}}
+      </paper-button>
 
-      <firebase-auth provider="github" id="githubAuth"
-        location="https://polymer-demos.firebaseio.com"
-        user="{{githubUser}}">
-      </firebase-auth>
-
-      <paper-button raised id="githubButton" on-tap="toggleGithubLogin">
-        <div class="github-icon"></div>{{githubStatus(githubUser)}}
+      <paper-button id="githubButton" on-tap="toggleGithubLogin" raised>
+        GitHub {{loginStatus(githubUser)}}
       </paper-button>
     </paper-toolbar>
-      <!-- <paper-button raised on-tap="refresh" disabled="{{bool(_requestQueue.length)}}">Refresh</paper-button> -->
 
-      <!-- <paper-toggle-button checked="{{autoRefresh}}"></paper-toggle-button>
-      <div>{{nextRefreshStatus}}</div> -->
+    <!-- <paper-button raised on-tap="refresh" disabled="{{bool(_requestQueue.length)}}">Refresh</paper-button> -->
+
+    <!-- <paper-toggle-button checked="{{autoRefresh}}"></paper-toggle-button>
+    <div>{{nextRefreshStatus}}</div> -->
+
+
+    <div id="issueList" hidden$="[[!_shouldShowResults(googleUser,githubUser)]]">
+      <div class="status">Status: {{status}}</div>
+
+      <div class="row header">
+        <div class="name"></div>
+        <div class="count">Untriaged</div>
+        <div class="count">P0</div>
+        <div class="count">P1</div>
+        <div class="count">P2</div>
+        <div class="count">PR's</div>
+        <div class="count">Status</div>
+      </div>
+      <div class="row all">
+        <div class="name">All</div>
+        <div class="count">{{all.untriaged.length}}</div>
+        <div class="count">{{all.p0.length}}</div>
+        <div class="count">{{all.p1.length}}</div>
+        <div class="count">{{all.p2.length}}</div>
+        <div class="count">{{all.prs.length}}</div>
+      </div>
+      <template is="dom-repeat" items="{{all.leads}}">
+        <div class="row lead" on-tap="_toggleDetails">
+          <div class="name">{{item.name}}</div>
+          <div class="count">{{item.untriaged.length}}</div>
+          <div class="count">{{item.p0.length}}</div>
+          <div class="count">{{item.p1.length}}</div>
+          <div class="count">{{item.p2.length}}</div>
+          <div class="count">{{item.prs.length}}</div>
+        </div>
+        <iron-collapse opened="{{item.detailsOpen}}">
+          <template is="dom-repeat" items="{{item.maintainers}}">
+            <div class="row maintainer" on-tap="_toggleDetails">
+              <div class="name">{{item.name}}</div>
+              <div class="count">{{item.untriaged.length}}</div>
+              <div class="count">{{item.p0.length}}</div>
+              <div class="count">{{item.p1.length}}</div>
+              <div class="count">{{item.p2.length}}</div>
+              <div class="count">{{item.prs.length}}</div>
+            </div>
+            <iron-collapse opened="{{item.detailsOpen}}">
+              <template is="dom-repeat" items="{{item.repos}}">
+                <div class="row repo" on-tap="_toggleDetails">
+                  <div class="name "><a target="_blank" href="https://github.com/polymerelements/{{item.name}}">{{item.name}}</a></div>
+                  <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+-label%3A%22p0+-+critical%22++-label%3A%22p1+-+backlog%22++-label%3A%22p2+-+icebox%22+">
+                    {{item.untriaged.length}}</a></div>
+                  <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p0+-+critical%22">{{item.p0.length}}</a></div>
+                  <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p1+-+backlog%22">{{item.p1.length}}</a></div>
+                  <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p2+-+icebox%22">{{item.p2.length}}</a></div>
+                  <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen">{{item.prs.length}}</a></div>
+                  <div class="count"><a target="_blank" href="https://travis-ci.org/PolymerElements/{{item.name}}"><img src="https://travis-ci.org/PolymerElements/{{item.name}}.svg?branch=master"></a></div>
+                </div>
+              </template>
+            </iron-collapse>
+          </template>
+        </iron-collapse>
+      </template>
+    </div>
 
     <google-sheets id="sheet"
       client-id="{{clientId}}"
       key="1m0SleaDfRTPzDvlnInip9x4FXT6O98M2W8jwZyHmNp8" tab-id="3" rows="{{rows}}">
     </google-sheets>
 
-    <div class="status">Status: {{status}}</div>
+    <google-signin-aware
+      client-id="{{clientId}}"
+      scopes="https://spreadsheets.google.com/feeds"
+      id="googleAuth"
+      is-authorized="{{googleUser}}">
+    </google-signin-aware>
 
-    <div class="row header">
-      <div class="name"></div>
-      <div class="count">Untriaged</div>
-      <div class="count">P0</div>
-      <div class="count">P1</div>
-      <div class="count">P2</div>
-      <div class="count">PR's</div>
-      <div class="count">Status</div>
-    </div>
-    <div class="row all">
-      <div class="name">All</div>
-      <div class="count">{{all.untriaged.length}}</div>
-      <div class="count">{{all.p0.length}}</div>
-      <div class="count">{{all.p1.length}}</div>
-      <div class="count">{{all.p2.length}}</div>
-      <div class="count">{{all.prs.length}}</div>
-    </div>
-    <template is="dom-repeat" items="{{all.leads}}">
-      <div class="row lead" on-tap="_toggleDetails">
-        <div class="name">{{item.name}}</div>
-        <div class="count">{{item.untriaged.length}}</div>
-        <div class="count">{{item.p0.length}}</div>
-        <div class="count">{{item.p1.length}}</div>
-        <div class="count">{{item.p2.length}}</div>
-        <div class="count">{{item.prs.length}}</div>
-      </div>
-      <iron-collapse opened="{{item.detailsOpen}}">
-        <template is="dom-repeat" items="{{item.maintainers}}">
-          <div class="row maintainer" on-tap="_toggleDetails">
-            <div class="name">{{item.name}}</div>
-            <div class="count">{{item.untriaged.length}}</div>
-            <div class="count">{{item.p0.length}}</div>
-            <div class="count">{{item.p1.length}}</div>
-            <div class="count">{{item.p2.length}}</div>
-            <div class="count">{{item.prs.length}}</div>
-          </div>
-          <iron-collapse opened="{{item.detailsOpen}}">
-            <template is="dom-repeat" items="{{item.repos}}">
-              <div class="row repo" on-tap="_toggleDetails">
-                <div class="name "><a target="_blank" href="https://github.com/polymerelements/{{item.name}}">{{item.name}}</a></div>
-                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+-label%3A%22p0+-+critical%22++-label%3A%22p1+-+backlog%22++-label%3A%22p2+-+icebox%22+">
-                  {{item.untriaged.length}}</a></div>
-                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p0+-+critical%22">{{item.p0.length}}</a></div>
-                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p1+-+backlog%22">{{item.p1.length}}</a></div>
-                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p2+-+icebox%22">{{item.p2.length}}</a></div>
-                <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen">{{item.prs.length}}</a></div>
-                <div class="count"><a target="_blank" href="https://travis-ci.org/PolymerElements/{{item.name}}"><img src="https://travis-ci.org/PolymerElements/{{item.name}}.svg?branch=master"></a></div>
-              </div>
-            </template>
-          </iron-collapse>
-        </template>
-      </iron-collapse>
-    </template>
+    <firebase-auth provider="github" id="githubAuth"
+      location="https://polymer-demos.firebaseio.com"
+      user="{{githubUser}}">
+    </firebase-auth>
 
   </template>
 
@@ -214,13 +219,25 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         },
         nextRefreshStatus: {
           value: 'Auto refresh off'
+        },
+        githubUser: {
+          value: false,
+          type: Boolean
+        },
+        googleUser: {
+          value: false,
+          type: Boolean
         }
       },
       observers: [
         '_refresh(_leads, githubUser)'
       ],
-      githubStatus: function(user) {
-        return user ? 'Logout' : 'Login';
+      // listeners: {
+      //   'google-signin-aware-success': '_onGoogleSignIn',
+      //   'google-signin-aware-signed-out': '_onGoogleSignOut'
+      // },
+      loginStatus: function(user) {
+        return user ? 'Sign Out' : 'Sign In';
       },
       bool: function(b) {
         return Boolean(b);
@@ -230,6 +247,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           this.$.githubAuth.logout();
         } else {
           this.$.githubAuth.login();
+        }
+      },
+      toggleGoogleLogin: function() {
+        if (this.googleUser) {
+          this.$.googleAuth.signOut();
+        } else {
+          this.$.googleAuth.signIn();
         }
       },
       refresh: function() {
@@ -406,6 +430,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           this.nextRefreshStatus = 'Next refresh at ' +
             new Date(Date.now() + this.autoRefreshInterval).toLocaleTimeString();
         }
+      },
+      _shouldShowResults(googleUser, githubUser) {
+        return googleUser && githubUser;
       }
     });
   </script>
