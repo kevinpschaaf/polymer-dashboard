@@ -20,6 +20,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <link rel="import" href="../bower_components/paper-styles/color.html">
 <link rel="import" href="../bower_components/paper-toggle-button/paper-toggle-button.html">
 <link rel="import" href="../bower_components/paper-toolbar/paper-toolbar.html">
+<link rel="import" href="../bower_components/paper-spinner/paper-spinner.html">
+
 
 <dom-module id="pd-app">
 
@@ -186,7 +188,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       </div>
       <br>
 
-      <div class="status">Status: {{status}}</div>
+
+      <div class="status">
+        <paper-spinner active="{{loading}}"></paper-spinner>
+        <div>
+          Status: {{status}}
+        </div>
+      </div>
       <br>
 
       <div class="list">
@@ -293,6 +301,15 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         googleUser: {
           value: false,
           type: Boolean
+        },
+        __loadingGithub: {
+          computed: '_computeLoadingGithub(_requestQueue.*)'
+        },
+        __loadingSpreadsheet: {
+          value: true
+        },
+        loading: {
+          computed: '_computeLoading(__loadingGithub, __loadingSpreadsheet)'
         }
       },
       observers: [
@@ -334,6 +351,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           m.push({name: row.gsx$element.$t});
         }
         this._leads = leads;
+        if (rows.length > 0) {
+          this.__loadingSpreadsheet = false;
+        }
       },
       _refresh: function(leads, githubUser) {
         if (leads && githubUser) {
@@ -381,7 +401,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             self._handleUntriagedError(xhr);
           });
         } else {
-          this.status = 'Idle.';
+          if (this.__loadingSpreadsheet) {
+            this.status = 'Reading spreadsheet';
+          } else {
+            this.status = 'Idle.';
+          }
           this._queueRefresh();
         }
       },
@@ -491,6 +515,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       },
       _shouldShowResults: function(googleUser, githubUser) {
         return googleUser && githubUser;
+      },
+      _computeLoading: function(loadingGithub, loadingSpreadsheet) {
+        return loadingGithub || loadingSpreadsheet;
+      },
+      _computeLoadingGithub: function() {
+        return !!this._requestQueue && this._requestQueue.length > 0;
       }
     });
   </script>
