@@ -20,120 +20,123 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <link rel="import" href="../bower_components/paper-styles/color.html">
 <link rel="import" href="../bower_components/paper-toggle-button/paper-toggle-button.html">
 <link rel="import" href="../bower_components/paper-toolbar/paper-toolbar.html">
+<link rel="import" href="../bower_components/paper-spinner/paper-spinner.html">
+<link rel="import" href="../bower_components/iron-localstorage/iron-localstorage.html">
+
+<dom-module id='pd-shared-styles'>
+  <style>
+    :host {
+      display: block;
+      background: white;
+    }
+    .horizontal {
+      @apply(--layout-horizontal);
+      @apply(--layout-center);
+    }
+    .justified {
+      @apply(--layout-justified);
+    }
+    paper-toolbar {
+      background-color: var(--paper-blue-grey-50);
+      color: var(--paper-blue-grey-700);
+      --paper-toolbar-title: {
+        margin: 20px;
+      }
+    }
+    a:link, a:visited {
+      color: var(--google-blue-700);
+    }
+    .needs-signin {
+      width: 500px;
+      text-align: center;
+      margin: 150px auto;
+    }
+    .results {
+      max-width: 1000px;
+      margin: 40px auto;
+    }
+    .status {
+      text-align: center;
+    }
+    .p0 { color: var(--paper-pink-500) !important; }
+    .p1 { color: var(--paper-orange-500) !important; }
+    .p2 { color: var(--paper-indigo-500) !important; }
+    .pr { color: var(--paper-green-500) !important; }
+
+    .tldr {
+      text-align: center;
+      margin: 0 20px;
+    }
+    .tldr .value {
+      font-size: 60px;
+      line-height: 1;
+      font-weight: 700;
+    }
+    .tldr .title {
+      font-size: 15px;
+      font-weight: 300;
+      text-transform: uppercase;
+    }
+    .row {
+      @apply(--layout-horizontal);
+      font-size: 16px;
+      padding: .3rem 0;
+    }
+    .row.repo {
+      border: 1px solid #EFF0EC;
+    }
+    .row > * {
+      padding: 5px;
+      box-sizing: border-box;
+    }
+    .row.all {
+      background: var(--paper-pink-500);
+      color: white;
+      font-weight: bold;
+    }
+    .row.lead {
+      background: var(--paper-blue-grey-50);
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .row.maintainer {
+      background: var(--paper-blue-grey-100);
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .name {
+      width: 300px;
+      background: initial;
+    }
+    .lead .name {
+      font-weight: bold;
+      padding-left: 20px;
+    }
+    .maintainer .name {
+      padding-left: 40px;
+      font-weight: normal;
+    }
+    .repo .name {
+      padding-left: 50px;
+    }
+    .count {
+      width: 80px;
+    }
+    paper-checkbox {
+      --paper-checkbox-label-color: var(--paper-blue-grey-700);
+      font-size: 14px;
+      margin-right: 15px;
+    }
+
+    paper-button {
+      text-transform: none;
+    }
+  </style>
+</dom-module>
 
 <dom-module id="pd-app">
-
   <template strip-whitespace>
-
-    <style>
-      :host {
-        display: block;
-        background: white;
-      }
-      .horizontal {
-        @apply(--layout-horizontal);
-        @apply(--layout-center);
-      }
-      .justified {
-        @apply(--layout-justified);
-      }
-      paper-toolbar {
-        background-color: var(--paper-blue-grey-50);
-        color: var(--paper-blue-grey-700);
-        --paper-toolbar-title: {
-          margin: 20px;
-        }
-      }
-      a:link, a:visited {
-        color: var(--google-blue-700);
-      }
-      .needs-signin {
-        width: 500px;
-        text-align: center;
-        margin: 150px auto;
-      }
-      .results {
-        max-width: 1000px;
-        margin: 40px auto;
-      }
-      .status {
-        text-align: center;
-      }
-      .p0 { color: var(--paper-pink-500) !important; }
-      .p1 { color: var(--paper-orange-500) !important; }
-      .p2 { color: var(--paper-indigo-500) !important; }
-      .pr { color: var(--paper-green-500) !important; }
-
-      .tldr {
-        text-align: center;
-        margin: 0 20px;
-      }
-      .tldr .value {
-        font-size: 60px;
-        line-height: 1;
-        font-weight: 700;
-      }
-      .tldr .title {
-        font-size: 15px;
-        font-weight: 300;
-        text-transform: uppercase;
-      }
-      .row {
-        @apply(--layout-horizontal);
-        font-size: 16px;
-        padding: .3rem 0;
-      }
-      .row.repo {
-        border: 1px solid #EFF0EC;
-      }
-      .row > * {
-        padding: 5px;
-        box-sizing: border-box;
-      }
-      .row.all {
-        background: var(--paper-pink-500);
-        color: white;
-        font-weight: bold;
-      }
-      .row.lead {
-        background: var(--paper-blue-grey-50);
-        cursor: pointer;
-        font-weight: bold;
-      }
-      .row.maintainer {
-        background: var(--paper-blue-grey-100);
-        cursor: pointer;
-        font-weight: bold;
-      }
-      .name {
-        width: 300px;
-        background: initial;
-      }
-      .lead .name {
-        font-weight: bold;
-        padding-left: 20px;
-      }
-      .maintainer .name {
-        padding-left: 40px;
-        font-weight: normal;
-      }
-      .repo .name {
-        padding-left: 50px;
-      }
-      .count {
-        width: 80px;
-      }
-      paper-checkbox {
-        --paper-checkbox-label-color: var(--paper-blue-grey-700);
-        font-size: 14px;
-        margin-right: 15px;
-      }
-
-      paper-button {
-        text-transform: none;
-      }
-    </style>
-
+    <style include="pd-shared-styles"></style>
     <paper-toolbar>
       <span class="title">Polymer Elements Issues</span>
 
@@ -186,7 +189,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       </div>
       <br>
 
-      <div class="status">Status: {{status}}</div>
+
+      <div class="status">
+        <paper-spinner active="{{loading}}"></paper-spinner>
+        <div>
+          Status: {{status}}
+        </div>
+      </div>
       <br>
 
       <div class="list">
@@ -201,40 +210,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         </div>
 
         <template is="dom-repeat" items="{{all.leads}}">
-          <div class="row lead" on-tap="_toggleDetails">
-            <div class="name">{{item.name}}</div>
-            <div class="count">{{item.untriaged.length}}</div>
-            <div class="count p0">{{item.p0.length}}</div>
-            <div class="count p1">{{item.p1.length}}</div>
-            <div class="count p2">{{item.p2.length}}</div>
-            <div class="count pr">{{item.prs.length}}</div>
-          </div>
-          <iron-collapse opened="{{item.detailsOpen}}">
-            <template is="dom-repeat" items="{{item.maintainers}}">
-              <div class="row maintainer" on-tap="_toggleDetails">
-                <div class="name">{{item.name}}</div>
-                <div class="count">{{item.untriaged.length}}</div>
-                <div class="count p0">{{item.p0.length}}</div>
-                <div class="count p1">{{item.p1.length}}</div>
-                <div class="count p2">{{item.p2.length}}</div>
-                <div class="count p3">{{item.prs.length}}</div>
-              </div>
-              <iron-collapse opened="{{item.detailsOpen}}">
-                <template is="dom-repeat" items="{{item.repos}}">
-                  <div class="row repo" on-tap="_toggleDetails">
-                    <div class="name "><a target="_blank" href="https://github.com/polymerelements/{{item.name}}">{{item.name}}</a></div>
-                    <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+-label%3A%22p0+-+critical%22++-label%3A%22p1+-+backlog%22++-label%3A%22p2+-+icebox%22+">
-                      {{item.untriaged.length}}</a></div>
-                    <div class="count"><a class="p0" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p0+-+critical%22">{{item.p0.length}}</a></div>
-                    <div class="count"><a class="p1" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p1+-+backlog%22">{{item.p1.length}}</a></div>
-                    <div class="count"><a class="p2" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p2+-+icebox%22">{{item.p2.length}}</a></div>
-                    <div class="count"><a class="pr" target="_blank" href="https://github.com/polymerelements/{{item.name}}/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen">{{item.prs.length}}</a></div>
-                    <div class="count"><a target="_blank" href="https://travis-ci.org/PolymerElements/{{item.name}}"><img src="https://travis-ci.org/PolymerElements/{{item.name}}.svg?branch=master"></a></div>
-                  </div>
-                </template>
-              </iron-collapse>
-            </template>
-          </iron-collapse>
+          <pd-lead lead={{item}}>
+          </pd-lead>
         </template>
       </div>
     </div>
@@ -293,6 +270,15 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         googleUser: {
           value: false,
           type: Boolean
+        },
+        __loadingGithub: {
+          computed: '_computeLoadingGithub(_requestQueue.*)'
+        },
+        __loadingSpreadsheet: {
+          value: true
+        },
+        loading: {
+          computed: '_computeLoading(__loadingGithub, __loadingSpreadsheet)'
         }
       },
       observers: [
@@ -334,6 +320,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           m.push({name: row.gsx$element.$t});
         }
         this._leads = leads;
+        if (rows.length > 0) {
+          this.__loadingSpreadsheet = false;
+        }
       },
       _refresh: function(leads, githubUser) {
         if (leads && githubUser) {
@@ -381,7 +370,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             self._handleUntriagedError(xhr);
           });
         } else {
-          this.status = 'Idle.';
+          if (this.__loadingSpreadsheet) {
+            this.status = 'Reading spreadsheet';
+          } else {
+            this.status = 'Idle.';
+          }
           this._queueRefresh();
         }
       },
@@ -446,9 +439,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         curr = curr.concat(items);
         this.set([allPath, name], curr);
       },
-      _toggleDetails: function(e) {
-        e.model.set('item.detailsOpen', !e.model.item.detailsOpen);
-      },
       _handleUntriagedError: function(xhr) {
         this.status = 'Error: ' + xhr.status;
         this.shift('_requestQueue');
@@ -491,8 +481,117 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       },
       _shouldShowResults: function(googleUser, githubUser) {
         return googleUser && githubUser;
+      },
+      _computeLoading: function(loadingGithub, loadingSpreadsheet) {
+        return loadingGithub || loadingSpreadsheet;
+      },
+      _computeLoadingGithub: function() {
+        return !!this._requestQueue && this._requestQueue.length > 0;
       }
     });
   </script>
 
+</dom-module>
+
+<dom-module id='pd-lead'>
+  <template>
+    <style include="pd-shared-styles"></style>
+    <div class="row lead" on-tap="__toggleDetails">
+      <div class="name">{{lead.name}}</div>
+      <div class="count">{{lead.untriaged.length}}</div>
+      <div class="count p0">{{lead.p0.length}}</div>
+      <div class="count p1">{{lead.p1.length}}</div>
+      <div class="count p2">{{lead.p2.length}}</div>
+      <div class="count pr">{{lead.prs.length}}</div>
+    </div>
+    <iron-collapse opened="{{lead.detailsOpen}}">
+      <template is="dom-repeat" items="{{lead.maintainers}}">
+        <pd-maintainer maintainer="{{item}}"></pd-maintainer>
+      </template>
+    </iron-collapse>
+    <iron-localstorage name="lead-{{lead.name}}-opened" value="{{opened}}">
+    </iron-localstorage>
+  </template>
+  <script>
+    Polymer({
+      is: 'pd-lead',
+      properties: {
+        opened: {
+          observer: '__openedChanged'
+        }
+      },
+      observers: [
+        '__leadOpenedChanged(lead.detailsOpen)',
+      ],
+      __openedChanged: function() {
+        this.set('lead.detailsOpen', this.opened);
+      },
+      __toggleDetails: function(e) {
+        this.opened = !this.opened;
+      },
+      __leadOpenedChanged: function() {
+        if (!this.lead) {
+          return;
+        }
+        this.opened = this.lead.detailsOpen;
+      }
+    })
+  </script>
+</dom-module>
+
+<dom-module id='pd-maintainer'>
+  <template>
+    <style include="pd-shared-styles"></style>
+    <div class="row maintainer" on-tap="__toggleDetails">
+      <div class="name">{{maintainer.name}}</div>
+      <div class="count">{{maintainer.untriaged.length}}</div>
+      <div class="count p0">{{maintainer.p0.length}}</div>
+      <div class="count p1">{{maintainer.p1.length}}</div>
+      <div class="count p2">{{maintainer.p2.length}}</div>
+      <div class="count p3">{{maintainer.prs.length}}</div>
+    </div>
+    <iron-collapse opened="{{maintainer.detailsOpen}}">
+      <template is="dom-repeat" items="{{maintainer.repos}}">
+        <div class="row repo" on-tap="__toggleDetails">
+          <div class="name "><a target="_blank" href="https://github.com/polymerelements/{{item.name}}">{{item.name}}</a></div>
+          <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+-label%3A%22p0+-+critical%22++-label%3A%22p1+-+backlog%22++-label%3A%22p2+-+icebox%22+">
+            {{item.untriaged.length}}</a></div>
+          <div class="count"><a class="p0" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p0+-+critical%22">{{item.p0.length}}</a></div>
+          <div class="count"><a class="p1" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p1+-+backlog%22">{{item.p1.length}}</a></div>
+          <div class="count"><a class="p2" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p2+-+icebox%22">{{item.p2.length}}</a></div>
+          <div class="count"><a class="pr" target="_blank" href="https://github.com/polymerelements/{{item.name}}/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen">{{item.prs.length}}</a></div>
+          <div class="count"><a target="_blank" href="https://travis-ci.org/PolymerElements/{{item.name}}"><img src="https://travis-ci.org/PolymerElements/{{item.name}}.svg?branch=master"></a></div>
+        </div>
+      </template>
+    </iron-collapse>
+    <iron-localstorage
+        name="maintainer-{{maintainer.name}}-opened" value="{{opened}}">
+    </iron-localstorage>
+  </template>
+  <script>
+    Polymer({
+      is: 'pd-maintainer',
+
+      properties: {
+        opened: {
+          observer: '__openedChanged'
+        }
+      },
+      observers: [
+        '__maintainerOpenedChanged(maintainer.detailsOpen)',
+      ],
+      __openedChanged: function() {
+        this.set('maintainer.detailsOpen', this.opened);
+      },
+      __toggleDetails: function(e) {
+        this.opened = !this.opened;
+      },
+      __maintainerOpenedChanged: function() {
+        if (!this.lead) {
+          return;
+        }
+        this.opened = this.maintainer.detailsOpen;
+      }
+    })
+  </script>
 </dom-module>
