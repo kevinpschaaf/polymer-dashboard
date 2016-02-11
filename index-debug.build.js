@@ -8965,6 +8965,9 @@ this.dataHost._forwardInstanceProp(this, prop, value);
 },
 _extendTemplate: function (template, proto) {
 var n$ = Object.getOwnPropertyNames(proto);
+if (proto._propertySetter) {
+template._propertySetter = proto._propertySetter;
+}
 for (var i = 0, n; i < n$.length && (n = n$[i]); i++) {
 var val = template[n];
 var pd = Object.getOwnPropertyDescriptor(proto, n);
@@ -19880,6 +19883,164 @@ return '';
 return barJustify + (barJustify === 'justified' ? '' : '-justified');
 }
 });
+Polymer.PaperSpinnerBehavior = {
+listeners: {
+'animationend': '__reset',
+'webkitAnimationEnd': '__reset'
+},
+properties: {
+active: {
+type: Boolean,
+value: false,
+reflectToAttribute: true,
+observer: '__activeChanged'
+},
+alt: {
+type: String,
+value: 'loading',
+observer: '__altChanged'
+},
+__coolingDown: {
+type: Boolean,
+value: false
+}
+},
+__computeContainerClasses: function (active, coolingDown) {
+return [
+active || coolingDown ? 'active' : '',
+coolingDown ? 'cooldown' : ''
+].join(' ');
+},
+__activeChanged: function (active, old) {
+this.__setAriaHidden(!active);
+this.__coolingDown = !active && old;
+},
+__altChanged: function (alt) {
+if (alt === this.getPropertyInfo('alt').value) {
+this.alt = this.getAttribute('aria-label') || alt;
+} else {
+this.__setAriaHidden(alt === '');
+this.setAttribute('aria-label', alt);
+}
+},
+__setAriaHidden: function (hidden) {
+var attr = 'aria-hidden';
+if (hidden) {
+this.setAttribute(attr, 'true');
+} else {
+this.removeAttribute(attr);
+}
+},
+__reset: function () {
+this.active = false;
+this.__coolingDown = false;
+}
+};
+Polymer({
+is: 'paper-spinner',
+behaviors: [Polymer.PaperSpinnerBehavior]
+});
+Polymer({
+is: 'iron-localstorage',
+properties: {
+name: {
+type: String,
+value: ''
+},
+value: {
+type: Object,
+notify: true
+},
+useRaw: {
+type: Boolean,
+value: false
+},
+autoSaveDisabled: {
+type: Boolean,
+value: false
+},
+errorMessage: {
+type: String,
+notify: true
+},
+_loaded: {
+type: Boolean,
+value: false
+}
+},
+observers: [
+'_debounceReload(name,useRaw)',
+'_trySaveValue(autoSaveDisabled)',
+'_trySaveValue(value.*)'
+],
+ready: function () {
+this._boundHandleStorage = this._handleStorage.bind(this);
+},
+attached: function () {
+window.addEventListener('storage', this._boundHandleStorage);
+},
+detached: function () {
+window.removeEventListener('storage', this._boundHandleStorage);
+},
+_handleStorage: function (ev) {
+if (ev.key == this.name) {
+this._load(true);
+}
+},
+_trySaveValue: function () {
+if (this._doNotSave) {
+return;
+}
+if (this._loaded && !this.autoSaveDisabled) {
+this.debounce('save', this.save);
+}
+},
+_debounceReload: function () {
+this.debounce('reload', this.reload);
+},
+reload: function () {
+this._loaded = false;
+this._load();
+},
+_load: function (externalChange) {
+var v = window.localStorage.getItem(this.name);
+if (v === null) {
+this._loaded = true;
+this._doNotSave = true;
+this.value = null;
+this._doNotSave = false;
+this.fire('iron-localstorage-load-empty', { externalChange: externalChange });
+} else {
+if (!this.useRaw) {
+try {
+v = JSON.parse(v);
+} catch (x) {
+this.errorMessage = 'Could not parse local storage value';
+console.error('could not parse local storage value', v);
+v = null;
+}
+}
+this._loaded = true;
+this._doNotSave = true;
+this.value = v;
+this._doNotSave = false;
+this.fire('iron-localstorage-load', { externalChange: externalChange });
+}
+},
+save: function () {
+var v = this.useRaw ? this.value : JSON.stringify(this.value);
+try {
+if (this.value === null || this.value === undefined) {
+window.localStorage.removeItem(this.name);
+} else {
+window.localStorage.setItem(this.name, v);
+}
+} catch (ex) {
+this.errorMessage = ex.message;
+console.error('localStorage could not be saved. Safari incoginito mode?', ex);
+}
+}
+});
 Polymer({
 is: 'pd-app',
 properties: {
@@ -19906,7 +20067,10 @@ type: Boolean
 googleUser: {
 value: false,
 type: Boolean
-}
+},
+__loadingGithub: { computed: '_computeLoadingGithub(_requestQueue.*)' },
+__loadingSpreadsheet: { value: true },
+loading: { computed: '_computeLoading(__loadingGithub, __loadingSpreadsheet)' }
 },
 observers: ['_refresh(_leads, githubUser)'],
 loginStatus: function (user) {
@@ -19941,6 +20105,9 @@ var m = o[row.gsx$proposedmaintainer.$t] || (o[row.gsx$proposedmaintainer.$t] = 
 m.push({ name: row.gsx$element.$t });
 }
 this._leads = leads;
+if (rows.length > 0) {
+this.__loadingSpreadsheet = false;
+}
 },
 _refresh: function (leads, githubUser) {
 if (leads && githubUser) {
@@ -20002,7 +20169,11 @@ xhr.addEventListener('error', function () {
 self._handleUntriagedError(xhr);
 });
 } else {
+if (this.__loadingSpreadsheet) {
+this.status = 'Reading spreadsheet';
+} else {
 this.status = 'Idle.';
+}
 this._queueRefresh();
 }
 },
@@ -20087,9 +20258,6 @@ allPath,
 name
 ], curr);
 },
-_toggleDetails: function (e) {
-e.model.set('item.detailsOpen', !e.model.item.detailsOpen);
-},
 _handleUntriagedError: function (xhr) {
 this.status = 'Error: ' + xhr.status;
 this.shift('_requestQueue');
@@ -20137,5 +20305,45 @@ j,
 },
 _shouldShowResults: function (googleUser, githubUser) {
 return googleUser && githubUser;
+},
+_computeLoading: function (loadingGithub, loadingSpreadsheet) {
+return loadingGithub || loadingSpreadsheet;
+},
+_computeLoadingGithub: function () {
+return !!this._requestQueue && this._requestQueue.length > 0;
+}
+});
+Polymer({
+is: 'pd-lead',
+properties: { opened: { observer: '__openedChanged' } },
+observers: ['__leadOpenedChanged(lead.detailsOpen)'],
+__openedChanged: function () {
+this.set('lead.detailsOpen', this.opened);
+},
+__toggleDetails: function (e) {
+this.opened = !this.opened;
+},
+__leadOpenedChanged: function () {
+if (!this.lead) {
+return;
+}
+this.opened = this.lead.detailsOpen;
+}
+});
+Polymer({
+is: 'pd-maintainer',
+properties: { opened: { observer: '__openedChanged' } },
+observers: ['__maintainerOpenedChanged(maintainer.detailsOpen)'],
+__openedChanged: function () {
+this.set('maintainer.detailsOpen', this.opened);
+},
+__toggleDetails: function (e) {
+this.opened = !this.opened;
+},
+__maintainerOpenedChanged: function () {
+if (!this.lead) {
+return;
+}
+this.opened = this.maintainer.detailsOpen;
 }
 });
