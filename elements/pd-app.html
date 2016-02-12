@@ -210,6 +210,40 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         </div>
 
         <template is="dom-repeat" items="{{all.leads}}">
+          <div class="row lead" on-tap="_toggleDetails">
+            <div class="name">{{item.name}}</div>
+            <div class="count">{{item.untriaged.length}}</div>
+            <div class="count p0">{{item.p0.length}}</div>
+            <div class="count p1">{{item.p1.length}}</div>
+            <div class="count p2">{{item.p2.length}}</div>
+            <div class="count pr">{{item.prs.length}}</div>
+          </div>
+          <iron-collapse opened="{{item.detailsOpen}}">
+            <template is="dom-repeat" items="{{item.maintainers}}">
+              <div class="row maintainer" on-tap="_toggleDetails">
+                <div class="name">{{item.name}}</div>
+                <div class="count">{{item.untriaged.length}}</div>
+                <div class="count p0">{{item.p0.length}}</div>
+                <div class="count p1">{{item.p1.length}}</div>
+                <div class="count p2">{{item.p2.length}}</div>
+                <div class="count p3">{{item.prs.length}}</div>
+              </div>
+              <iron-collapse opened="{{item.detailsOpen}}">
+                <template is="dom-repeat" items="{{item.repos}}">
+                  <div class="row repo">
+                    <div class="name "><a target="_blank" href="https://github.com/polymerelements/{{item.name}}">{{item.name}}</a></div>
+                    <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+-label%3A%22p0+-+critical%22++-label%3A%22p1+-+backlog%22++-label%3A%22p2+-+icebox%22+">
+                      {{item.untriaged.length}}</a></div>
+                    <div class="count"><a class="p0" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p0+-+critical%22">{{item.p0.length}}</a></div>
+                    <div class="count"><a class="p1" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p1+-+backlog%22">{{item.p1.length}}</a></div>
+                    <div class="count"><a class="p2" target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3A%22p2+-+icebox%22">{{item.p2.length}}</a></div>
+                    <div class="count"><a class="pr" target="_blank" href="https://github.com/polymerelements/{{item.name}}/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen">{{item.prs.length}}</a></div>
+                    <div class="count"><a target="_blank" href="https://travis-ci.org/PolymerElements/{{item.name}}"><img src="https://travis-ci.org/PolymerElements/{{item.name}}.svg?branch=master"></a></div>
+                  </div>
+                </template>
+              </iron-collapse>
+            </template>
+          </iron-collapse>
           <pd-lead lead={{item}}>
           </pd-lead>
         </template>
