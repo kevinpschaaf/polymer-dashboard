@@ -374,7 +374,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     </div>
     <iron-collapse opened="{{maintainer.detailsOpen}}">
       <template is="dom-repeat" items="{{maintainer.repos}}">
-        <div class="row repo" on-tap="__toggleDetails">
+        <div class="row repo">
           <div class="name "><a target="_blank" href="https://github.com/polymerelements/{{item.name}}">{{item.name}}</a></div>
           <div class="count"><a target="_blank" href="https://github.com/polymerelements/{{item.name}}/issues?utf8=%E2%9C%93&amp;q=is%3Aissue+is%3Aopen+-label%3A%22p0+-+critical%22++-label%3A%22p1+-+backlog%22++-label%3A%22p2+-+icebox%22+">
             {{item.untriaged.length}}</a></div>
