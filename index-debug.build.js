@@ -2455,6 +2455,7 @@ var useShadow = wantShadow && hasShadow;
 var hasNativeImports = Boolean('import' in document.createElement('link'));
 var useNativeImports = hasNativeImports;
 var useNativeCustomElements = !window.CustomElements || window.CustomElements.useNative;
+var usePolyfillProto = !useNativeCustomElements && !Object.__proto__;
 return {
 wantShadow: wantShadow,
 hasShadow: hasShadow,
@@ -2462,7 +2463,8 @@ nativeShadow: nativeShadow,
 useShadow: useShadow,
 useNativeShadow: useShadow && nativeShadow,
 useNativeImports: useNativeImports,
-useNativeCustomElements: useNativeCustomElements
+useNativeCustomElements: useNativeCustomElements,
+usePolyfillProto: usePolyfillProto
 };
 }()
 };
@@ -2761,11 +2763,16 @@ this.behaviors = this._desugarSomeBehaviors(this.behaviors);
 }
 },
 _desugarSomeBehaviors: function (behaviors) {
+var behaviorSet = [];
 behaviors = this._flattenBehaviorsList(behaviors);
 for (var i = behaviors.length - 1; i >= 0; i--) {
-this._mixinBehavior(behaviors[i]);
+var b = behaviors[i];
+if (behaviorSet.indexOf(b) === -1) {
+this._mixinBehavior(b);
+behaviorSet.unshift(b);
 }
-return behaviors;
+}
+return behaviorSet;
 },
 _flattenBehaviorsList: function (behaviors) {
 var flat = [];
@@ -5241,7 +5248,7 @@ _parseNodeAnnotations: function (node, list, stripWhiteSpace) {
 return node.nodeType === Node.TEXT_NODE ? this._parseTextNodeAnnotation(node, list) : this._parseElementAnnotations(node, list, stripWhiteSpace);
 },
 _bindingRegex: function () {
-var IDENT = '(?:' + '[a-zA-Z_$][\\w.:$-*]*' + ')';
+var IDENT = '(?:' + '[a-zA-Z_$][\\w.:$\\-*]*' + ')';
 var NUMBER = '(?:' + '[-+]?[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?' + ')';
 var SQUOTE_STRING = '(?:' + '\'(?:[^\'\\\\]|\\\\.)*\'' + ')';
 var DQUOTE_STRING = '(?:' + '"(?:[^"\\\\]|\\\\.)*"' + ')';
@@ -5532,8 +5539,10 @@ var b = note.bindings[j];
 for (var k = 0; k < b.parts.length; k++) {
 var p = b.parts[k];
 if (!p.literal) {
-p.signature = this._parseMethod(p.value);
-if (!p.signature) {
+var signature = this._parseMethod(p.value);
+if (signature) {
+p.signature = signature;
+} else {
 p.model = this._modelForPath(p.value);
 }
 }
@@ -5926,7 +5935,7 @@ if (type === 'touchstart' || type === 'touchmove') {
 Gestures.handleTouchAction(ev);
 }
 }
-if (type === 'touchend') {
+if (type === 'touchend' && !ev.__polymerSimulatedTouch) {
 POINTERSTATE.mouse.target = Polymer.dom(ev).rootTarget;
 ignoreMouse(true);
 }
@@ -5940,10 +5949,8 @@ var recognizers = Gestures.recognizers;
 for (var i = 0, r; i < recognizers.length; i++) {
 r = recognizers[i];
 if (gs[r.name] && !handled[r.name]) {
-if (r.flow && r.flow.start.indexOf(ev.type) > -1) {
-if (r.reset) {
+if (r.flow && r.flow.start.indexOf(ev.type) > -1 && r.reset) {
 r.reset();
-}
 }
 }
 }
@@ -6212,6 +6219,9 @@ var movefn = function movefn(e) {
 var x = e.clientX, y = e.clientY;
 if (self.hasMovedEnough(x, y)) {
 self.info.state = self.info.started ? e.type === 'mouseup' ? 'end' : 'track' : 'start';
+if (self.info.state === 'start') {
+Gestures.prevent('tap');
+}
 self.info.addMove({
 x: x,
 y: y
@@ -6226,7 +6236,6 @@ self.info.started = true;
 };
 var upfn = function upfn(e) {
 if (self.info.started) {
-Gestures.prevent('tap');
 movefn(e);
 }
 untrackDocument(self.info);
@@ -6245,6 +6254,9 @@ var t = Gestures.findOriginalTarget(e);
 var ct = e.changedTouches[0];
 var x = ct.clientX, y = ct.clientY;
 if (this.hasMovedEnough(x, y)) {
+if (this.info.state === 'start') {
+Gestures.prevent('tap');
+}
 this.info.addMove({
 x: x,
 y: y
@@ -6258,7 +6270,6 @@ touchend: function (e) {
 var t = Gestures.findOriginalTarget(e);
 var ct = e.changedTouches[0];
 if (this.info.started) {
-Gestures.prevent('tap');
 this.info.state = 'end';
 this.info.addMove({
 x: ct.clientX,
@@ -6651,7 +6662,7 @@ _sortPropertyEffects: function () {
 var EFFECT_ORDER = {
 'compute': 0,
 'annotation': 1,
-'computedAnnotation': 2,
+'annotatedComputation': 2,
 'reflect': 3,
 'notify': 4,
 'observer': 5,
@@ -6684,11 +6695,11 @@ Object.defineProperty(model, property, defun);
 upper: function (name) {
 return name[0].toUpperCase() + name.substring(1);
 },
-_addAnnotatedListener: function (model, index, property, path, event) {
+_addAnnotatedListener: function (model, index, property, path, event, negated) {
 if (!model._bindListeners) {
 model._bindListeners = [];
 }
-var fn = this._notedListenerFactory(property, path, this._isStructured(path));
+var fn = this._notedListenerFactory(property, path, this._isStructured(path), negated);
 var eventName = event || Polymer.CaseMap.camelToDashCase(property) + '-changed';
 model._bindListeners.push({
 index: index,
@@ -6704,12 +6715,15 @@ return path.indexOf('.') > 0;
 _isEventBogus: function (e, target) {
 return e.path && e.path[0] !== target;
 },
-_notedListenerFactory: function (property, path, isStructured) {
+_notedListenerFactory: function (property, path, isStructured, negated) {
 return function (target, value, targetPath) {
 if (targetPath) {
 this._notifyPath(this._fixPath(path, property, targetPath), value);
 } else {
 value = target[property];
+if (negated) {
+value = !value;
+}
 if (!isStructured) {
 this[path] = value;
 } else {
@@ -6738,7 +6752,7 @@ return context._notifyListener(changedFn, e);
 };
 Polymer.Base.extend(Polymer.Bind, {
 _shouldAddListener: function (effect) {
-return effect.name && effect.kind != 'attribute' && effect.kind != 'text' && !effect.isCompound && effect.parts[0].mode === '{' && !effect.parts[0].negate;
+return effect.name && effect.kind != 'attribute' && effect.kind != 'text' && !effect.isCompound && effect.parts[0].mode === '{';
 },
 _annotationEffect: function (source, value, effect) {
 if (source != effect.value) {
@@ -6776,19 +6790,22 @@ var args = Polymer.Bind._marshalArgs(this.__data__, effect, source, value);
 if (args) {
 fn.apply(this, args);
 }
+} else if (effect.dynamicFn) {
 } else {
 this._warn(this._logf('_complexObserverEffect', 'observer method `' + effect.method + '` not defined'));
 }
 },
 _computeEffect: function (source, value, effect) {
-var args = Polymer.Bind._marshalArgs(this.__data__, effect, source, value);
-if (args) {
 var fn = this[effect.method];
 if (fn) {
-this.__setProperty(effect.name, fn.apply(this, args));
+var args = Polymer.Bind._marshalArgs(this.__data__, effect, source, value);
+if (args) {
+var computedvalue = fn.apply(this, args);
+this.__setProperty(effect.name, computedvalue);
+}
+} else if (effect.dynamicFn) {
 } else {
 this._warn(this._logf('_computeEffect', 'compute method `' + effect.method + '` not defined'));
-}
 }
 },
 _annotatedComputationEffect: function (source, value, effect) {
@@ -6803,6 +6820,7 @@ computedvalue = !computedvalue;
 }
 this._applyEffectValue(effect, computedvalue);
 }
+} else if (effect.dynamicFn) {
 } else {
 computedHost._warn(computedHost._logf('_annotatedComputationEffect', 'compute method `' + effect.method + '` not defined'));
 }
@@ -6810,6 +6828,7 @@ computedHost._warn(computedHost._logf('_annotatedComputationEffect', 'compute me
 _marshalArgs: function (model, effect, path, value) {
 var values = [];
 var args = effect.args;
+var bailoutEarly = args.length > 1 || effect.dynamicFn;
 for (var i = 0, l = args.length; i < l; i++) {
 var arg = args[i];
 var name = arg.name;
@@ -6821,7 +6840,7 @@ v = Polymer.Base._get(name, model);
 } else {
 v = model[name];
 }
-if (args.length > 1 && v === undefined) {
+if (bailoutEarly && v === undefined) {
 return;
 }
 if (arg.wildcard) {
@@ -6876,12 +6895,23 @@ Polymer.Bind.ensurePropertyEffects(this, p);
 },
 _addComputedEffect: function (name, expression) {
 var sig = this._parseMethod(expression);
+var dynamicFn = sig.dynamicFn;
 for (var i = 0, arg; i < sig.args.length && (arg = sig.args[i]); i++) {
 this._addPropertyEffect(arg.model, 'compute', {
 method: sig.method,
 args: sig.args,
 trigger: arg,
-name: name
+name: name,
+dynamicFn: dynamicFn
+});
+}
+if (dynamicFn) {
+this._addPropertyEffect(sig.method, 'compute', {
+method: sig.method,
+args: sig.args,
+trigger: null,
+name: name,
+dynamicFn: dynamicFn
 });
 }
 },
@@ -6903,11 +6933,21 @@ var sig = this._parseMethod(observer);
 if (!sig) {
 throw new Error('Malformed observer expression \'' + observer + '\'');
 }
+var dynamicFn = sig.dynamicFn;
 for (var i = 0, arg; i < sig.args.length && (arg = sig.args[i]); i++) {
 this._addPropertyEffect(arg.model, 'complexObserver', {
 method: sig.method,
 args: sig.args,
-trigger: arg
+trigger: arg,
+dynamicFn: dynamicFn
+});
+}
+if (dynamicFn) {
+this._addPropertyEffect(sig.method, 'complexObserver', {
+method: sig.method,
+args: sig.args,
+trigger: null,
+dynamicFn: dynamicFn
 });
 }
 },
@@ -6921,7 +6961,7 @@ this._addAnnotationEffect(binding, i);
 },
 _addAnnotationEffect: function (note, index) {
 if (Polymer.Bind._shouldAddListener(note)) {
-Polymer.Bind._addAnnotatedListener(this, index, note.name, note.parts[0].value, note.parts[0].event);
+Polymer.Bind._addAnnotatedListener(this, index, note.name, note.parts[0].value, note.parts[0].event, note.parts[0].negate);
 }
 for (var i = 0; i < note.parts.length; i++) {
 var part = note.parts[i];
@@ -6953,6 +6993,9 @@ if (!arg.literal) {
 this.__addAnnotatedComputationEffect(arg.model, index, note, part, arg);
 }
 }
+if (sig.dynamicFn) {
+this.__addAnnotatedComputationEffect(sig.method, index, note, part, null);
+}
 }
 },
 __addAnnotatedComputationEffect: function (property, index, note, part, trigger) {
@@ -6965,7 +7008,8 @@ name: note.name,
 negate: part.negate,
 method: part.signature.method,
 args: part.signature.args,
-trigger: trigger
+trigger: trigger,
+dynamicFn: part.signature.dynamicFn
 });
 },
 _parseMethod: function (expression) {
@@ -6975,6 +7019,10 @@ var sig = {
 method: m[1],
 static: true
 };
+if (this.getPropertyInfo(sig.method) !== Polymer.nob) {
+sig.static = false;
+sig.dynamicFn = true;
+}
 if (m[2].trim()) {
 var args = m[2].replace(/\\,/g, '&comma;').split(',');
 return this._parseArgs(args, sig);
@@ -7062,6 +7110,8 @@ this._effectEffects('__static__', null, this._propertyEffects.__static__);
 }
 }
 });
+(function () {
+var usePolyfillProto = Polymer.Settings.usePolyfillProto;
 Polymer.Base._addFeature({
 _setupConfigure: function (initialConfig) {
 this._config = {};
@@ -7108,7 +7158,10 @@ this._distributeConfig(this._config);
 _configureProperties: function (properties, config) {
 for (var i in properties) {
 var c = properties[i];
-if (c.value !== undefined) {
+if (!usePolyfillProto && this.hasOwnProperty(i)) {
+config[i] = this[i];
+delete this[i];
+} else if (c.value !== undefined) {
 var value = c.value;
 if (typeof value == 'function') {
 value = value.call(this, this._config);
@@ -7182,6 +7235,7 @@ h[0].call(this, h[1], h[2], h[3]);
 this._handlers = [];
 }
 });
+}());
 (function () {
 'use strict';
 Polymer.Base._addFeature({
@@ -7924,7 +7978,7 @@ SCOPE_NAME: 'style-scope'
 var SCOPE_NAME = api.SCOPE_NAME;
 var SCOPE_DOC_SELECTOR = ':not([' + SCOPE_NAME + '])' + ':not(.' + SCOPE_NAME + ')';
 var COMPLEX_SELECTOR_SEP = ',';
-var SIMPLE_SELECTOR_SEP = /(^|[\s>+~]+)([^\s>+~]+)/g;
+var SIMPLE_SELECTOR_SEP = /(^|[\s>+~]+)((?:\[.+?\]|[^\s>+~=\[])+)/g;
 var HOST = ':host';
 var ROOT = ':root';
 var HOST_PAREN = /(:host)(?:\(((?:\([^)(]*\)|[^)(]*)+?)\))/g;
@@ -8031,7 +8085,9 @@ this._encapsulateStyle = !nativeShadow && Boolean(this._template);
 if (this._template) {
 this._styles = this._collectStyles();
 var cssText = styleTransformer.elementStyles(this);
-if (cssText) {
+var needsStatic = this._needsStaticStyles(this._styles);
+if (needsStatic || !nativeShadow) {
+cssText = needsStatic ? cssText : ' ';
 var style = styleUtil.applyCss(cssText, this.is, nativeShadow ? this._template.content : null);
 if (!nativeShadow) {
 this._scopeStyle = style;
@@ -8169,17 +8225,9 @@ return any;
 }
 },
 collectCssText: function (rule) {
-var customCssText = '';
 var cssText = rule.parsedCssText;
 cssText = cssText.replace(this.rx.BRACKETED, '').replace(this.rx.VAR_ASSIGN, '');
-var parts = cssText.split(';');
-for (var i = 0, p; i < parts.length; i++) {
-p = parts[i];
-if (p.match(this.rx.MIXIN_MATCH) || p.match(this.rx.VAR_MATCH) || this.rx.ANIMATION_MATCH.test(p) || styleUtil.isKeyframesSelector(rule)) {
-customCssText += p + ';\n';
-}
-}
-return customCssText;
+return cssText;
 },
 collectPropertiesInCssText: function (cssText, props) {
 var m;
@@ -8221,12 +8269,13 @@ m = p.match(this.rx.MIXIN_MATCH);
 if (m) {
 p = this.valueForProperty(props[m[1]], props);
 } else {
-var pp = p.split(':');
-if (pp[1]) {
-pp[1] = pp[1].trim();
-pp[1] = this.valueForProperty(pp[1], props) || pp[1];
+var colon = p.indexOf(':');
+if (colon !== -1) {
+var pp = p.substring(colon);
+pp = pp.trim();
+pp = this.valueForProperty(pp, props) || pp;
+p = p.substring(0, colon) + pp;
 }
-p = pp.join(':');
 }
 parts[i] = p && p.lastIndexOf(';') === p.length - 1 ? p.slice(0, -1) : p || '';
 }
@@ -8358,7 +8407,7 @@ var selector = rule.transformedSelector;
 var scope = viaAttr ? '[' + styleTransformer.SCOPE_NAME + '~=' + scopeId + ']' : '.' + scopeId;
 var parts = selector.split(',');
 for (var i = 0, l = parts.length, p; i < l && (p = parts[i]); i++) {
-parts[i] = p.match(hostRx) ? p.replace(hostSelector, hostSelector + scope) : scope + ' ' + p;
+parts[i] = p.match(hostRx) ? p.replace(hostSelector, scope) : scope + ' ' + p;
 }
 rule.selector = parts.join(',');
 },
@@ -8411,7 +8460,7 @@ props[i] = v;
 rx: {
 VAR_ASSIGN: /(?:^|[;\s{]\s*)(--[\w-]*?)\s*:\s*(?:([^;{]*)|{([^}]*)})(?:(?=[;\s}])|$)/gi,
 MIXIN_MATCH: /(?:^|\W+)@apply[\s]*\(([^)]*)\)/i,
-VAR_MATCH: /(^|\W+)var\([\s]*([^,)]*)[\s]*,?[\s]*((?:[^,)]*)|(?:[^;]*\([^;)]*\)))[\s]*?\)/gi,
+VAR_MATCH: /(^|\W+)var\([\s]*([^,)]*)[\s]*,?[\s]*((?:[^,()]*)|(?:[^;()]*\([^;)]*\)))[\s]*?\)/gi,
 VAR_CAPTURE: /\([\s]*(--[^,\s)]*)(?:,[\s]*(--[^,\s)]*))?(?:\)|,)/gi,
 ANIMATION_MATCH: /(animation\s*:)|(animation-name\s*:)/,
 IS_VAR: /^--/,
@@ -8522,10 +8571,22 @@ return api;
 'use strict';
 var serializeValueToAttribute = Polymer.Base.serializeValueToAttribute;
 var propertyUtils = Polymer.StyleProperties;
+var styleUtil = Polymer.StyleUtil;
 var styleTransformer = Polymer.StyleTransformer;
 var styleDefaults = Polymer.StyleDefaults;
 var nativeShadow = Polymer.Settings.useNativeShadow;
 Polymer.Base._addFeature({
+_needsStaticStyles: function (styles) {
+var needsStatic;
+for (var i = 0, l = styles.length, css; i < l; i++) {
+css = styleUtil.parser._clean(styles[i].textContent);
+needsStatic = needsStatic || Boolean(css);
+if (css.match(propertyUtils.rx.MIXIN_MATCH) || css.match(propertyUtils.rx.VAR_MATCH)) {
+return false;
+}
+}
+return needsStatic;
+},
 _prepStyleProperties: function () {
 this._ownStylePropertyNames = this._styles ? propertyUtils.decorateStyles(this._styles) : null;
 },
@@ -8639,7 +8700,7 @@ serializeValueToAttribute.call(this, value, attribute, node);
 },
 _scopeElementClass: function (element, selector) {
 if (!nativeShadow && !this._scopeCssViaAttr) {
-selector += (selector ? ' ' : '') + SCOPE_NAME + ' ' + this.is + (element._scopeSelector ? ' ' + XSCOPE_NAME + ' ' + element._scopeSelector : '');
+selector = (selector ? selector + ' ' : '') + SCOPE_NAME + ' ' + this.is + (element._scopeSelector ? ' ' + XSCOPE_NAME + ' ' + element._scopeSelector : '');
 }
 return selector;
 },
@@ -18387,7 +18448,7 @@ value: ''
 },
 theme: {
 type: String,
-value: 'dark'
+value: 'light'
 },
 width: {
 type: String,
